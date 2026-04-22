@@ -5,9 +5,10 @@ Drop your ABN AMRO Excel (TXT) export into the /input folder, then run:
     python process.py
 
 Output: /output/boekhouding_YYYYMMDD_HHMM.xlsx  with:
-  - Sheet 1: All transactions with categories
-  - Sheet 2: Monthly overview per category (income / expenses split)
-  - Sheet 3: Unknowns to review (transactions that need a category)
+  - Sheet 1: Transacties       — all transactions, sorted by date
+  - Sheet 2: Maand Overzicht   — kasboek-style blocks per month
+  - Sheet 3: Jaar Overzicht    — same structure per year
+  - Sheet 4: Onbekend          — unknown merchants grouped for easy triage
 """
 
 import os
@@ -17,12 +18,10 @@ import glob
 import pandas as pd
 from datetime import datetime
 from openpyxl import load_workbook, Workbook
-from openpyxl.styles import (
-    PatternFill, Font, Alignment, Border, Side, numbers
-)
+from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 
-# ── Paths ────────────────────────────────────────────────────────────────────
+# ── Paths ─────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 INPUT_DIR  = os.path.join(BASE_DIR, "input")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
@@ -31,125 +30,183 @@ RULES_FILE = os.path.join(BASE_DIR, "rules.xlsx")
 os.makedirs(INPUT_DIR,  exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ── Colors ───────────────────────────────────────────────────────────────────
-C_HEADER   = "1F4E79"   # dark blue
-C_ALT_ROW  = "EEF3FA"   # light blue
-C_UNKNOWN  = "FFF2CC"   # yellow – needs attention
-C_INCOME   = "E2EFDA"   # green – income
-C_TOTAL    = "D6E4BC"   # darker green – totals
-C_EXPENSE  = "FDECEA"   # light red – expense total
-WHITE      = "FFFFFF"
+# ── Category definitions ──────────────────────────────────────────────────────
+INCOME_CATS = [
+    "Salaris",
+    "DUO / Studiefinanciering",
+    "Zorgtoeslag",
+    "Familie & Giften",
+    "Inkomsten Overig",
+]
+VASTE_LASTEN_CATS = [
+    "Huur & Wonen",
+    "Zorgverzekering",
+    "Telefoon & Internet",
+    "Bankkosten",
+    "Abonnementen",
+]
+DAGELIJKS_CATS = [
+    "Boodschappen",
+    "Eten & Drinken",
+    "OV & Reizen",
+    "Sport & Fitness",
+    "Online Winkelen",
+    "Kleding",
+    "Gezondheid",
+    "Tabak",
+    "Cultuur & Entertainment",
+    "Studie",
+]
+OVERIG_CATS = ["Sparen", "Diversen"]
 
-# ── Step 1: Find & load the TAB file(s) ──────────────────────────────────────
+ALL_KNOWN_CATS = INCOME_CATS + VASTE_LASTEN_CATS + DAGELIJKS_CATS + OVERIG_CATS
+
+OWN_ACCOUNTS = {"536542171", "844835730"}
+
+# ── Colors ────────────────────────────────────────────────────────────────────
+WHITE = "FFFFFF"
+
+C_INC_HDR  = "375623"   # dark forest green
+C_INC_SUB  = "548235"   # medium green
+C_INC_ROW  = "E2EFDA"   # light green
+
+C_VL_HDR   = "1F4E79"   # dark blue
+C_VL_SUB   = "2E75B6"   # medium blue
+C_VL_ROW   = "DEEAF1"   # light blue
+
+C_DAG_HDR  = "843C0C"   # dark orange-brown
+C_DAG_SUB  = "C55A11"   # medium orange
+C_DAG_ROW  = "FCE4D6"   # light orange
+
+C_OVR_HDR  = "595959"   # dark gray
+C_OVR_SUB  = "808080"   # medium gray
+C_OVR_ROW  = "F2F2F2"   # light gray
+
+C_SAM_HDR  = "1F4E79"   # dark blue (same as VL)
+C_NETTO_POS = "375623"  # green
+C_NETTO_NEG = "C00000"  # red
+
+C_HEADER   = "1F4E79"
+C_ALT_ROW  = "EEF3FA"
+C_UNKNOWN  = "FFF2CC"
+
+# ── Dutch month labels ────────────────────────────────────────────────────────
+MAANDEN_NL = {
+    1: "Jan", 2: "Feb", 3: "Mrt", 4: "Apr", 5: "Mei",  6: "Jun",
+    7: "Jul", 8: "Aug", 9: "Sep", 10: "Okt", 11: "Nov", 12: "Dec",
+}
+
+
+def format_period(period_str, group_by):
+    """'2026-03' → "Mrt '26"  (month)  or  '2026'  (year)"""
+    if group_by == "year":
+        return period_str
+    yr, mo = period_str.split("-")
+    return f"{MAANDEN_NL[int(mo)]} '{yr[2:]}"
+
+
+def dutch_euros(value):
+    """€2,035 → '€2.035'  (Dutch thousands separator for terminal output)"""
+    return "€" + f"{int(round(value)):,}".replace(",", ".")
+
+
+# ── Step 1: Find & load TAB files ─────────────────────────────────────────────
 def find_input_files():
     patterns = ["*.TAB", "*.tab", "*.txt", "*.TXT"]
-    files = []
+    seen, files = set(), []
     for p in patterns:
-        files.extend(glob.glob(os.path.join(INPUT_DIR, p)))
+        for f in glob.glob(os.path.join(INPUT_DIR, p)):
+            key = os.path.normcase(os.path.abspath(f))
+            if key not in seen:
+                seen.add(key)
+                files.append(f)
     if not files:
-        print(f"❌  Geen invoerbestanden gevonden in {INPUT_DIR}/")
-        print("    Download je ABN AMRO afschrift als 'Excel (TXT)' en zet het daar neer.")
+        print(f"Geen invoerbestanden gevonden in {INPUT_DIR}/")
+        print("Download je ABN AMRO afschrift als 'Excel (TXT)' en zet het daar neer.")
         sys.exit(1)
-    print(f"✅  {len(files)} invoerbestand(en) gevonden:")
+    print(f"Gevonden: {len(files)} invoerbestand(en)")
     for f in files:
-        print(f"    {os.path.basename(f)}")
+        print(f"  {os.path.basename(f)}")
     return files
 
 
 def validate_tab_file(df, filepath):
-    """Validate that df matches the expected ABN AMRO TAB export format."""
-    name = os.path.basename(filepath)
+    """Validate ABN AMRO TAB export format; exit with clear Dutch error if wrong."""
+    name   = os.path.basename(filepath)
     errors = []
 
     if len(df.columns) != 8:
-        errors.append(f"verwacht 8 kolommen, maar gevonden {len(df.columns)}")
+        errors.append(f"verwacht 8 kolommen, gevonden {len(df.columns)}")
 
     if len(df) == 0:
         errors.append("bestand bevat geen transacties")
     else:
-        # Date column must look like YYYYMMDD (8 digits)
         for v in df["date"].dropna().head(3):
-            if not re.match(r'^\d{8}$', str(v).strip()):
+            if not re.match(r"^\d{8}$", str(v).strip()):
                 errors.append(
                     f"datum-kolom niet in JJJJMMDD-formaat (voorbeeld: '{v}')"
                 )
                 break
-
-        # Amount column must use Dutch decimal notation (comma as decimal)
         if not any("," in str(v) for v in df["amount"].dropna().head(5)):
             errors.append(
                 "bedrag-kolom mist komma als decimaalteken "
-                "(verwacht Nederlandstalige notatie, bijv. '-19,42')"
+                "(verwacht bijv. '-19,42')"
             )
 
     if errors:
-        print(f"\n❌  Ongeldig bestandsformaat: {name}")
+        print(f"\nOngeldig bestandsformaat: {name}")
         for e in errors:
-            print(f"    • {e}")
-        print("    Verwacht: ABN AMRO 'Excel (TXT)' export – 8 tab-gescheiden kolommen:")
-        print("    rekening | valuta | datum (JJJJMMDD) | saldo_voor | saldo_na "
-              "| valutadatum | bedrag | omschrijving")
+            print(f"  - {e}")
+        print("Verwacht: ABN AMRO 'Excel (TXT)' export, 8 tab-kolommen:")
+        print("  rekening | valuta | datum (JJJJMMDD) | saldo_voor | saldo_na"
+              " | valutadatum | bedrag | omschrijving")
         sys.exit(1)
 
 
 def load_transactions(files):
     dfs = []
     for f in files:
-        df = pd.read_csv(
+        raw = pd.read_csv(
             f, sep="\t", header=None, encoding="utf-8",
             names=["account", "currency", "date", "balance_before",
                    "balance_after", "value_date", "amount", "description"],
-            dtype=str
+            dtype=str,
         )
-        validate_tab_file(df, f)
-        dfs.append(df)
-    df = pd.concat(dfs, ignore_index=True)
+        validate_tab_file(raw, f)
+        dfs.append(raw)
 
-    # Deduplicate (in case both files have same account)
-    df = df.drop_duplicates()
-
-    # Clean up types
+    df = pd.concat(dfs, ignore_index=True).drop_duplicates()
     df["date"]        = pd.to_datetime(df["date"], format="%Y%m%d")
-    df["month"]       = df["date"].dt.to_period("M").astype(str)   # e.g. "2026-03"
+    df["month"]       = df["date"].dt.to_period("M").astype(str)
+    df["year"]        = df["date"].dt.year.astype(str)
     df["amount"]      = df["amount"].str.replace(",", ".").astype(float)
     df["description"] = df["description"].str.strip()
+    df["merchant"]    = df["description"].apply(extract_merchant)
+    df = df.sort_values("date").reset_index(drop=True)
 
-    # Extract a readable merchant name from the description
-    df["merchant"] = df["description"].apply(extract_merchant)
-
-    print(f"✅  {len(df)} transacties geladen  "
-          f"({df['date'].min().date()} → {df['date'].max().date()})")
+    print(f"Geladen: {len(df)} transacties  "
+          f"({df['date'].min().date()} - {df['date'].max().date()})")
     return df
 
 
 def extract_merchant(desc):
-    """Pull a clean merchant/counterparty name out of the raw description."""
     desc = str(desc).strip()
-    # BEA (pin/contactless): "BEA, Apple Pay   Merchant Name,PAS..."
     m = re.search(r"BEA,.*?\s{2,}(.+?),PAS", desc)
     if m:
         return m.group(1).strip()
-    # SEPA transfers: "/NAME/Counterparty Name/"
     m = re.search(r"/NAME/([^/]+)", desc)
     if m:
         return m.group(1).strip()
-    # ABN own costs
     if "ABN AMRO" in desc.upper():
         return "ABN AMRO Bank"
-    # Fallback: first 40 chars
     return desc[:40]
 
 
 # ── Step 2: Load categorisation rules ────────────────────────────────────────
 def load_rules():
-    """
-    rules.xlsx has columns: keyword | category
-    keyword is matched (case-insensitive, partial) against the merchant name.
-    Order matters – first match wins.
-    """
     if not os.path.exists(RULES_FILE):
-        print(f"⚠️   Geen rules.xlsx gevonden op {RULES_FILE}")
-        print("    Voer uit met --create-rules om een startbestand te maken.")
+        print(f"Geen rules.xlsx gevonden op {RULES_FILE}")
+        print("Voer uit met --create-rules om een startbestand te maken.")
         return []
 
     df = pd.read_excel(RULES_FILE, sheet_name="Rules")
@@ -159,44 +216,52 @@ def load_rules():
         cat = str(row.get("category", "")).strip()
         if kw and cat:
             rules.append((kw.lower(), cat))
-    print(f"✅  {len(rules)} categorisatieregels geladen")
+    print(f"Geladen: {len(rules)} categorisatieregels")
     return rules
 
 
 def categorise(merchant, rules):
-    merchant_lower = merchant.lower()
-    for keyword, category in rules:
-        if keyword in merchant_lower:
-            return category
-    return "⚠️ Onbekend"
+    ml = merchant.lower()
+    for kw, cat in rules:
+        if kw in ml:
+            return cat
+    return "Onbekend"
 
 
 def apply_categories(df, rules):
     df["category"] = df["merchant"].apply(lambda m: categorise(m, rules))
-    n_unknown = (df["category"] == "⚠️ Onbekend").sum()
-    n_total   = len(df)
-    pct = 100 * (n_total - n_unknown) / n_total if n_total else 0
-    print(f"✅  {n_total - n_unknown}/{n_total} transacties gecategoriseerd  ({pct:.0f}%)")
-    if n_unknown:
-        print(f"⚠️   {n_unknown} transacties hebben nog een categorie nodig → zie het 'Onbekend' tabblad")
+    n_unk   = (df["category"] == "Onbekend").sum()
+    n_total = len(df)
+    pct     = 100 * (n_total - n_unk) / n_total if n_total else 0
+    print(f"Gecategoriseerd: {n_total - n_unk}/{n_total}  ({pct:.0f}%)")
+    if n_unk:
+        print(f"  {n_unk} transacties zonder categorie - zie het 'Onbekend' tabblad")
+    return df
+
+
+def detect_internal_transfers(df):
+    """Mark transfers between own accounts as 'Interne Overboeking'."""
+    mask = pd.Series(False, index=df.index)
+    for (date_val, abs_amt), group in df.groupby(
+        [df["date"].dt.date, df["amount"].abs()]
+    ):
+        if len(group) >= 2:
+            accs = set(group["account"].unique())
+            if len(accs.intersection(OWN_ACCOUNTS)) >= 2:
+                if abs(group["amount"].sum()) < 0.02:
+                    mask.loc[group.index] = True
+    n = int(mask.sum())
+    if n:
+        df.loc[mask, "category"] = "Interne Overboeking"
+        print(f"Interne overboekingen: {n} transacties "
+              f"(betaalrekening <-> spaarrekening, uitgesloten van netto)")
     return df
 
 
 # ── Step 3: Build output Excel ────────────────────────────────────────────────
-def style_header(ws, row, cols, bg=C_HEADER, fg=WHITE, bold=True, height=20):
-    fill = PatternFill("solid", fgColor=bg)
-    font = Font(bold=bold, color=fg, name="Arial", size=10)
-    for col in range(1, cols + 1):
-        cell = ws.cell(row=row, column=col)
-        cell.fill = fill
-        cell.font = font
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[row].height = height
 
-
-def thin_border():
-    side = Side(style="thin", color="AAAAAA")
-    return Border(left=side, right=side, top=side, bottom=side)
+def _fill(hex_color):
+    return PatternFill("solid", fgColor=hex_color)
 
 
 def write_transactions_sheet(ws, df):
@@ -204,31 +269,28 @@ def write_transactions_sheet(ws, df):
     ws.freeze_panes = "A2"
 
     headers = ["Datum", "Rekening", "Omschrijving", "Merchant",
-               "Bedrag (€)", "Categorie", "Maand"]
+               "Bedrag (EUR)", "Categorie", "Maand"]
     for c, h in enumerate(headers, 1):
-        ws.cell(row=1, column=c, value=h)
-    style_header(ws, 1, len(headers))
+        cell = ws.cell(row=1, column=c, value=h)
+        cell.fill = _fill(C_HEADER)
+        cell.font = Font(bold=True, color=WHITE, name="Arial", size=10)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 20
 
-    alt_fill = PatternFill("solid", fgColor=C_ALT_ROW)
-    unk_fill = PatternFill("solid", fgColor=C_UNKNOWN)
-    inc_fill = PatternFill("solid", fgColor=C_INCOME)
-    euro_fmt = '#,##0.00 "€";[Red]-#,##0.00 "€"'
+    unk_fill = _fill(C_UNKNOWN)
+    inc_fill = _fill(C_INC_ROW)
+    alt_fill = _fill(C_ALT_ROW)
+    euro_fmt = '#,##0.00 "EUR";[Red]-#,##0.00 "EUR"'
 
     for r, (_, row) in enumerate(df.iterrows(), 2):
-        is_unknown = row["category"] == "⚠️ Onbekend"
-        is_income  = row["amount"] > 0
-        fill = (unk_fill if is_unknown
+        is_unk    = row["category"] == "Onbekend"
+        is_income = row["amount"] > 0
+        fill = (unk_fill if is_unk
                 else (inc_fill if is_income
                       else (alt_fill if r % 2 == 0 else None)))
-
         data = [
-            row["date"].date(),
-            row["account"],
-            row["description"][:80],
-            row["merchant"],
-            row["amount"],
-            row["category"],
-            row["month"],
+            row["date"].date(), row["account"], row["description"][:80],
+            row["merchant"], row["amount"], row["category"], row["month"],
         ]
         for c, val in enumerate(data, 1):
             cell = ws.cell(row=r, column=c, value=val)
@@ -239,241 +301,565 @@ def write_transactions_sheet(ws, df):
             if c == 5:
                 cell.number_format = euro_fmt
 
-    widths = [12, 12, 50, 28, 14, 22, 10]
-    for c, w in enumerate(widths, 1):
+    for c, w in enumerate([12, 12, 50, 28, 14, 22, 10], 1):
         ws.column_dimensions[get_column_letter(c)].width = w
-
     ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
 
 
-def write_overview_sheet(ws, df):
-    ws.title = "Overzicht per Maand"
+def write_overview_sheet(ws, df, group_by="month"):
+    """
+    Writes a kasboek-style overview with four colour-coded blocks
+    (INKOMEN / VASTE LASTEN / DAGELIJKSE UITGAVEN / OVERIG) followed by
+    a SAMENVATTING block and a green/red NETTO row.
+
+    group_by="month"  →  columns are Dutch short month names + Totaal + Gemiddeld
+    group_by="year"   →  columns are years + Totaal
+    """
+    if group_by == "month":
+        ws.title    = "Maand Overzicht"
+        periods     = sorted(df["month"].unique())
+        pivot_col   = "month"
+    else:
+        ws.title    = "Jaar Overzicht"
+        periods     = sorted(df["year"].unique())
+        pivot_col   = "year"
+
     ws.freeze_panes = "B2"
 
-    months     = sorted(df["month"].unique())
-    categories = sorted(df[df["category"] != "⚠️ Onbekend"]["category"].unique())
-    income_cats  = [c for c in categories if df[df["category"] == c]["amount"].sum() > 0]
-    expense_cats = [c for c in categories if c not in income_cats]
+    n          = len(periods)
+    tot_col    = n + 2
+    gem_col    = n + 3 if group_by == "month" else None
+    last_col   = gem_col or tot_col
+    euro_fmt   = '#,##0 "EUR";[Red]-#,##0 "EUR"'
 
-    euro_fmt = '#,##0.00 "€";[Red]-#,##0.00 "€"'
-    hdr_fill = PatternFill("solid", fgColor=C_HEADER)
-    hdr_font = Font(bold=True, color=WHITE, name="Arial", size=10)
-    tot_fill = PatternFill("solid", fgColor=C_TOTAL)
-    exp_fill = PatternFill("solid", fgColor=C_EXPENSE)
-    alt_fill = PatternFill("solid", fgColor=C_ALT_ROW)
-    inc_sec  = PatternFill("solid", fgColor="375623")  # dark forest green
-    exp_sec  = PatternFill("solid", fgColor="843C0C")  # dark red-brown
-    inc_sub  = PatternFill("solid", fgColor="70AD47")  # medium green
+    # Pivot for lookups (exclude non-real categories)
+    EXCLUDE_FROM_OVERVIEW = {"Onbekend", "Interne Overboeking"}
+    pivot = df[~df["category"].isin(EXCLUDE_FROM_OVERVIEW)].pivot_table(
+        index="category", columns=pivot_col,
+        values="amount", aggfunc="sum", fill_value=0,
+    )
 
-    total_col = len(months) + 2
+    def _val(cat, period):
+        try:
+            return float(pivot.loc[cat, period])
+        except KeyError:
+            return 0.0
 
-    # ── header row ──────────────────────────────────────────────────────────
-    ws.cell(row=1, column=1, value="Categorie")
-    ws.cell(row=1, column=1).fill = hdr_fill
-    ws.cell(row=1, column=1).font = hdr_font
-    for c, m in enumerate(months, 2):
-        cell = ws.cell(row=1, column=c, value=m)
-        cell.fill = hdr_fill
-        cell.font = hdr_font
-        cell.alignment = Alignment(horizontal="center")
-    ws.cell(row=1, column=total_col, value="Totaal")
-    ws.cell(row=1, column=total_col).fill = hdr_fill
-    ws.cell(row=1, column=total_col).font = hdr_font
+    # ── Row pointer (shared across all nested helpers) ────────────────────────
+    row_num = [2]   # list so nested functions can mutate it
 
-    pivot = df.pivot_table(index="category", columns="month",
-                           values="amount", aggfunc="sum", fill_value=0)
+    # ── Helpers ───────────────────────────────────────────────────────────────
+    def _header_row():
+        r = row_num[0]
+        ws.cell(row=r, column=1, value="Categorie")
+        ws.cell(row=r, column=1).fill = _fill(C_HEADER)
+        ws.cell(row=r, column=1).font = Font(bold=True, color=WHITE, name="Arial", size=10)
+        for c, p in enumerate(periods, 2):
+            cell = ws.cell(row=r, column=c, value=format_period(p, group_by))
+            cell.fill = _fill(C_HEADER)
+            cell.font = Font(bold=True, color=WHITE, name="Arial", size=10)
+            cell.alignment = Alignment(horizontal="center")
+        ws.cell(row=r, column=tot_col, value="Totaal")
+        ws.cell(row=r, column=tot_col).fill = _fill(C_HEADER)
+        ws.cell(row=r, column=tot_col).font = Font(bold=True, color=WHITE, name="Arial", size=10)
+        ws.cell(row=r, column=tot_col).alignment = Alignment(horizontal="center")
+        if gem_col:
+            ws.cell(row=r, column=gem_col, value="Gemiddeld")
+            ws.cell(row=r, column=gem_col).fill = _fill(C_HEADER)
+            ws.cell(row=r, column=gem_col).font = Font(bold=True, color=WHITE, name="Arial", size=10)
+            ws.cell(row=r, column=gem_col).alignment = Alignment(horizontal="center")
+        ws.row_dimensions[r].height = 20
+        row_num[0] += 1
 
-    def _section_header(row_num, label, fill):
-        for c in range(1, total_col + 1):
-            cell = ws.cell(row=row_num, column=c)
-            cell.fill = fill
-            cell.font = Font(bold=True, color=WHITE, name="Arial", size=9)
-        ws.cell(row=row_num, column=1).value = label
-        ws.row_dimensions[row_num].height = 16
+    def _section_hdr(label, color):
+        r = row_num[0]
+        for c in range(1, last_col + 1):
+            ws.cell(row=r, column=c).fill = _fill(color)
+            ws.cell(row=r, column=c).font = Font(bold=True, color=WHITE, name="Arial", size=9)
+        ws.cell(row=r, column=1).value = label
+        ws.row_dimensions[r].height = 16
+        row_num[0] += 1
 
-    def _cat_row(row_num, cat, is_income):
-        row_fill = alt_fill if row_num % 2 == 0 else None
-        ws.cell(row=row_num, column=1, value=cat).font = Font(
-            name="Arial", size=9, bold=is_income)
-        if row_fill:
-            ws.cell(row=row_num, column=1).fill = row_fill
-        row_total = 0
-        for c, m in enumerate(months, 2):
-            val = pivot.loc[cat, m] if (cat in pivot.index and m in pivot.columns) else 0
-            cell = ws.cell(row=row_num, column=c, value=round(val, 2))
+    def _data_row(cat, row_color):
+        r = row_num[0]
+        fill = _fill(row_color)
+        ws.cell(row=r, column=1, value=cat).fill = fill
+        ws.cell(row=r, column=1).font = Font(name="Arial", size=9)
+        total = 0.0
+        for c, p in enumerate(periods, 2):
+            v    = _val(cat, p)
+            cell = ws.cell(row=r, column=c, value=round(v))
             cell.number_format = euro_fmt
+            cell.fill = fill
             cell.font = Font(name="Arial", size=9)
-            if row_fill:
-                cell.fill = row_fill
-            row_total += val
-        tot_cell = ws.cell(row=row_num, column=total_col, value=round(row_total, 2))
-        tot_cell.number_format = euro_fmt
-        tot_cell.font = Font(name="Arial", size=9, bold=True)
-        tot_cell.fill = tot_fill if is_income else exp_fill
+            total += v
+        tc = ws.cell(row=r, column=tot_col, value=round(total))
+        tc.number_format = euro_fmt
+        tc.fill = fill
+        tc.font = Font(bold=True, name="Arial", size=9)
+        if gem_col:
+            avg = total / n if n else 0
+            gc = ws.cell(row=r, column=gem_col, value=round(avg))
+            gc.number_format = euro_fmt
+            gc.fill = fill
+            gc.font = Font(italic=True, name="Arial", size=9)
+        row_num[0] += 1
 
-    row_num = 2
+    def _subtotal_row(label, cats, color):
+        r     = row_num[0]
+        fill  = _fill(color)
+        font  = Font(bold=True, color=WHITE, name="Arial", size=9)
+        ws.cell(row=r, column=1, value=label).fill = fill
+        ws.cell(row=r, column=1).font = font
+        grand = 0.0
+        for c, p in enumerate(periods, 2):
+            v    = sum(_val(cat, p) for cat in cats)
+            cell = ws.cell(row=r, column=c, value=round(v))
+            cell.number_format = euro_fmt
+            cell.fill = fill
+            cell.font = font
+            grand += v
+        tc = ws.cell(row=r, column=tot_col, value=round(grand))
+        tc.number_format = euro_fmt
+        tc.fill = fill
+        tc.font = font
+        if gem_col:
+            avg = grand / n if n else 0
+            gc = ws.cell(row=r, column=gem_col, value=round(avg))
+            gc.number_format = euro_fmt
+            gc.fill = fill
+            gc.font = font
+        ws.row_dimensions[r].height = 15
+        row_num[0] += 1
 
-    # ── INKOMSTEN section ────────────────────────────────────────────────────
-    _section_header(row_num, "INKOMSTEN", inc_sec)
-    row_num += 1
-    for cat in income_cats:
-        _cat_row(row_num, cat, is_income=True)
-        row_num += 1
+    def _blank():
+        ws.row_dimensions[row_num[0]].height = 5
+        row_num[0] += 1
 
-    # income subtotal
-    inc_grand = 0
-    for c in range(1, total_col + 1):
-        cell = ws.cell(row=row_num, column=c)
-        cell.fill = inc_sub
-        cell.font = Font(bold=True, color=WHITE, name="Arial", size=9)
-    ws.cell(row=row_num, column=1).value = "Totaal inkomsten"
-    for c, m in enumerate(months, 2):
-        val = df[(df["month"] == m) & (df["category"].isin(income_cats))]["amount"].sum()
-        cell = ws.cell(row=row_num, column=c, value=round(val, 2))
+    def _samenvatting_row(label, cats, row_color, sub_color):
+        """A summary row with subtotal-style bold text and colored fill."""
+        r    = row_num[0]
+        fill = _fill(sub_color)
+        font = Font(bold=True, color=WHITE, name="Arial", size=9)
+        ws.cell(row=r, column=1, value=label).fill = fill
+        ws.cell(row=r, column=1).font = font
+        grand = 0.0
+        for c, p in enumerate(periods, 2):
+            v    = sum(_val(cat, p) for cat in cats)
+            cell = ws.cell(row=r, column=c, value=round(v))
+            cell.number_format = euro_fmt
+            cell.fill = fill
+            cell.font = font
+            grand += v
+        tc = ws.cell(row=r, column=tot_col, value=round(grand))
+        tc.number_format = euro_fmt
+        tc.fill = fill
+        tc.font = font
+        if gem_col:
+            avg = grand / n if n else 0
+            gc = ws.cell(row=r, column=gem_col, value=round(avg))
+            gc.number_format = euro_fmt
+            gc.fill = fill
+            gc.font = font
+        row_num[0] += 1
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Column headers
+    # ═══════════════════════════════════════════════════════════════════════════
+    _header_row()
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # INKOMEN
+    # ═══════════════════════════════════════════════════════════════════════════
+    _section_hdr("INKOMEN", C_INC_HDR)
+    for cat in INCOME_CATS:
+        _data_row(cat, C_INC_ROW)
+    _subtotal_row("Totaal Inkomen", INCOME_CATS, C_INC_SUB)
+    _blank()
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # VASTE LASTEN
+    # ═══════════════════════════════════════════════════════════════════════════
+    _section_hdr("VASTE LASTEN", C_VL_HDR)
+    for cat in VASTE_LASTEN_CATS:
+        _data_row(cat, C_VL_ROW)
+    _subtotal_row("Totaal Vaste Lasten", VASTE_LASTEN_CATS, C_VL_SUB)
+    _blank()
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # DAGELIJKSE UITGAVEN
+    # ═══════════════════════════════════════════════════════════════════════════
+    _section_hdr("DAGELIJKSE UITGAVEN", C_DAG_HDR)
+    for cat in DAGELIJKS_CATS:
+        _data_row(cat, C_DAG_ROW)
+    _subtotal_row("Totaal Dagelijks", DAGELIJKS_CATS, C_DAG_SUB)
+    _blank()
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # OVERIG
+    # ═══════════════════════════════════════════════════════════════════════════
+    _section_hdr("OVERIG", C_OVR_HDR)
+    for cat in OVERIG_CATS:
+        _data_row(cat, C_OVR_ROW)
+    _subtotal_row("Totaal Overig", OVERIG_CATS, C_OVR_SUB)
+    _blank()
+    _blank()
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SAMENVATTING
+    # ═══════════════════════════════════════════════════════════════════════════
+    _section_hdr("SAMENVATTING", C_SAM_HDR)
+    _samenvatting_row("Totaal Inkomen",      INCOME_CATS,       C_INC_ROW, C_INC_SUB)
+    _samenvatting_row("Totaal Vaste Lasten", VASTE_LASTEN_CATS, C_VL_ROW,  C_VL_SUB)
+    _samenvatting_row("Totaal Dagelijks",    DAGELIJKS_CATS,    C_DAG_ROW, C_DAG_SUB)
+    _samenvatting_row("Totaal Overig",       OVERIG_CATS,       C_OVR_ROW, C_OVR_SUB)
+
+    # NETTO — green if >= 0, red if < 0, per period (exclude internal transfers)
+    df_real = df[df["category"] != "Interne Overboeking"]
+    r    = row_num[0]
+    font = Font(bold=True, color=WHITE, name="Arial", size=11)
+    ws.cell(row=r, column=1, value="NETTO").font = font
+    ws.row_dimensions[r].height = 18
+    netto_grand = 0.0
+    for c, p in enumerate(periods, 2):
+        v     = df_real[df_real[pivot_col] == p]["amount"].sum()
+        color = C_NETTO_POS if v >= 0 else C_NETTO_NEG
+        cell  = ws.cell(row=r, column=c, value=round(v))
         cell.number_format = euro_fmt
-        cell.fill = inc_sub
-        cell.font = Font(bold=True, color=WHITE, name="Arial", size=9)
-        inc_grand += val
-    tot_cell = ws.cell(row=row_num, column=total_col, value=round(inc_grand, 2))
-    tot_cell.number_format = euro_fmt
-    tot_cell.fill = inc_sub
-    tot_cell.font = Font(bold=True, color=WHITE, name="Arial", size=9)
-    row_num += 2  # subtotal row + blank separator
+        cell.fill = _fill(color)
+        cell.font = font
+        netto_grand += v
+    netto_color = C_NETTO_POS if netto_grand >= 0 else C_NETTO_NEG
+    ws.cell(row=r, column=1).fill = _fill(netto_color)
+    tc = ws.cell(row=r, column=tot_col, value=round(netto_grand))
+    tc.number_format = euro_fmt
+    tc.fill = _fill(netto_color)
+    tc.font = font
+    if gem_col:
+        avg   = netto_grand / n if n else 0
+        color = C_NETTO_POS if avg >= 0 else C_NETTO_NEG
+        gc    = ws.cell(row=r, column=gem_col, value=round(avg))
+        gc.number_format = euro_fmt
+        gc.fill = _fill(color)
+        gc.font = font
 
-    # ── UITGAVEN section ─────────────────────────────────────────────────────
-    _section_header(row_num, "UITGAVEN", exp_sec)
-    row_num += 1
-    for cat in expense_cats:
-        _cat_row(row_num, cat, is_income=False)
-        row_num += 1
+    # ── Column widths ─────────────────────────────────────────────────────────
+    ws.column_dimensions["A"].width = 26
+    for c in range(2, last_col + 1):
+        ws.column_dimensions[get_column_letter(c)].width = 12
 
-    # ── TOTAAL NETTO ─────────────────────────────────────────────────────────
-    ws.cell(row=row_num, column=1, value="TOTAAL NETTO")
-    ws.cell(row=row_num, column=1).fill = hdr_fill
-    ws.cell(row=row_num, column=1).font = Font(bold=True, color=WHITE, name="Arial")
-    for c, m in enumerate(months, 2):
-        val = df[df["month"] == m]["amount"].sum()
-        cell = ws.cell(row=row_num, column=c, value=round(val, 2))
-        cell.number_format = euro_fmt
-        cell.font = Font(bold=True, name="Arial", color=WHITE)
-        cell.fill = hdr_fill
-    net_total = df["amount"].sum()
-    tot_cell = ws.cell(row=row_num, column=total_col, value=round(net_total, 2))
-    tot_cell.number_format = euro_fmt
-    tot_cell.font = Font(bold=True, name="Arial", color=WHITE)
-    tot_cell.fill = hdr_fill
 
-    # ── column widths ────────────────────────────────────────────────────────
-    ws.column_dimensions["A"].width = 28
-    for c in range(2, total_col + 1):
-        ws.column_dimensions[get_column_letter(c)].width = 14
+def write_jaar_samenvatting_sheet(ws, df, year_label=""):
+    """
+    Single-year summary: Totaal (EUR) + % van Inkomen per category.
+    Same 4-block colour structure as Maand Overzicht, but only 2 data columns.
+    """
+    ws.title = f"Jaar Samenvatting{' ' + year_label if year_label else ''}"
+    ws.freeze_panes = "B2"
+
+    euro_fmt = '#,##0 "EUR";[Red]-#,##0 "EUR"'
+    pct_fmt  = '0.0"%"'
+
+    EXCLUDE = {"Onbekend", "Interne Overboeking"}
+    df_real = df[~df["category"].isin(EXCLUDE)]
+
+    cat_totals = df_real.groupby("category")["amount"].sum()
+
+    def _total(cats):
+        return sum(cat_totals.get(c, 0.0) for c in cats)
+
+    totaal_inkomen = _total(INCOME_CATS)
+
+    def _pct(val):
+        return round(val / totaal_inkomen * 100, 1) if totaal_inkomen else 0.0
+
+    row_num = [2]
+
+    def _hdr():
+        r = row_num[0]
+        for c, h in enumerate(["Categorie", "Totaal", "% van Inkomen"], 1):
+            cell = ws.cell(row=r, column=c, value=h)
+            cell.fill = _fill(C_HEADER)
+            cell.font = Font(bold=True, color=WHITE, name="Arial", size=10)
+            cell.alignment = Alignment(horizontal="center" if c > 1 else "left")
+        ws.row_dimensions[r].height = 20
+        row_num[0] += 1
+
+    def _sec_hdr(label, color):
+        r = row_num[0]
+        for c in range(1, 4):
+            ws.cell(row=r, column=c).fill = _fill(color)
+            ws.cell(row=r, column=c).font = Font(bold=True, color=WHITE,
+                                                  name="Arial", size=9)
+        ws.cell(row=r, column=1).value = label
+        ws.row_dimensions[r].height = 16
+        row_num[0] += 1
+
+    def _data_row(cat, row_color):
+        r    = row_num[0]
+        fill = _fill(row_color)
+        val  = cat_totals.get(cat, 0.0)
+        ws.cell(row=r, column=1, value=cat).fill = fill
+        ws.cell(row=r, column=1).font = Font(name="Arial", size=9)
+        tc = ws.cell(row=r, column=2, value=round(val))
+        tc.number_format = euro_fmt
+        tc.fill = fill
+        tc.font = Font(name="Arial", size=9)
+        pc = ws.cell(row=r, column=3, value=_pct(val))
+        pc.number_format = pct_fmt
+        pc.fill = fill
+        pc.font = Font(italic=True, name="Arial", size=9)
+        row_num[0] += 1
+
+    def _subtotal(label, cats, color):
+        r    = row_num[0]
+        fill = _fill(color)
+        font = Font(bold=True, color=WHITE, name="Arial", size=9)
+        val  = _total(cats)
+        ws.cell(row=r, column=1, value=label).fill = fill
+        ws.cell(row=r, column=1).font = font
+        tc = ws.cell(row=r, column=2, value=round(val))
+        tc.number_format = euro_fmt
+        tc.fill = fill
+        tc.font = font
+        pc = ws.cell(row=r, column=3, value=_pct(val))
+        pc.number_format = pct_fmt
+        pc.fill = fill
+        pc.font = font
+        ws.row_dimensions[r].height = 15
+        row_num[0] += 1
+
+    def _blank():
+        ws.row_dimensions[row_num[0]].height = 5
+        row_num[0] += 1
+
+    def _sam_row(label, cats, sub_color):
+        r    = row_num[0]
+        fill = _fill(sub_color)
+        font = Font(bold=True, color=WHITE, name="Arial", size=9)
+        val  = _total(cats)
+        ws.cell(row=r, column=1, value=label).fill = fill
+        ws.cell(row=r, column=1).font = font
+        tc = ws.cell(row=r, column=2, value=round(val))
+        tc.number_format = euro_fmt
+        tc.fill = fill
+        tc.font = font
+        pc = ws.cell(row=r, column=3, value=_pct(val))
+        pc.number_format = pct_fmt
+        pc.fill = fill
+        pc.font = font
+        row_num[0] += 1
+
+    _hdr()
+
+    _sec_hdr("INKOMEN", C_INC_HDR)
+    for cat in INCOME_CATS:
+        _data_row(cat, C_INC_ROW)
+    _subtotal("Totaal Inkomen", INCOME_CATS, C_INC_SUB)
+    _blank()
+
+    _sec_hdr("VASTE LASTEN", C_VL_HDR)
+    for cat in VASTE_LASTEN_CATS:
+        _data_row(cat, C_VL_ROW)
+    _subtotal("Totaal Vaste Lasten", VASTE_LASTEN_CATS, C_VL_SUB)
+    _blank()
+
+    _sec_hdr("DAGELIJKSE UITGAVEN", C_DAG_HDR)
+    for cat in DAGELIJKS_CATS:
+        _data_row(cat, C_DAG_ROW)
+    _subtotal("Totaal Dagelijks", DAGELIJKS_CATS, C_DAG_SUB)
+    _blank()
+
+    _sec_hdr("OVERIG", C_OVR_HDR)
+    for cat in OVERIG_CATS:
+        _data_row(cat, C_OVR_ROW)
+    _subtotal("Totaal Overig", OVERIG_CATS, C_OVR_SUB)
+    _blank()
+    _blank()
+
+    _sec_hdr("SAMENVATTING", C_SAM_HDR)
+    _sam_row("Totaal Inkomen",      INCOME_CATS,       C_INC_SUB)
+    _sam_row("Totaal Vaste Lasten", VASTE_LASTEN_CATS, C_VL_SUB)
+    _sam_row("Totaal Dagelijks",    DAGELIJKS_CATS,    C_DAG_SUB)
+    _sam_row("Totaal Overig",       OVERIG_CATS,       C_OVR_SUB)
+
+    r     = row_num[0]
+    netto = df_real["amount"].sum()
+    color = C_NETTO_POS if netto >= 0 else C_NETTO_NEG
+    fill  = _fill(color)
+    font  = Font(bold=True, color=WHITE, name="Arial", size=11)
+    ws.cell(row=r, column=1, value="NETTO").fill = fill
+    ws.cell(row=r, column=1).font = font
+    tc = ws.cell(row=r, column=2, value=round(netto))
+    tc.number_format = euro_fmt
+    tc.fill = fill
+    tc.font = font
+    pc = ws.cell(row=r, column=3, value=_pct(netto))
+    pc.number_format = pct_fmt
+    pc.fill = fill
+    pc.font = font
+    ws.row_dimensions[r].height = 18
+
+    ws.column_dimensions["A"].width = 26
+    ws.column_dimensions["B"].width = 14
+    ws.column_dimensions["C"].width = 16
 
 
 def write_unknowns_sheet(ws, df):
-    ws.title = "⚠️ Onbekend"
-    unknowns = df[df["category"] == "⚠️ Onbekend"].copy()
+    ws.title = "Onbekend"
+    unknowns = df[df["category"] == "Onbekend"].copy()
 
     if unknowns.empty:
-        ws.cell(row=1, column=1, value="✅ Geen onbekende transacties!")
+        ws.cell(row=1, column=1,
+                value="Alles gecategoriseerd - geen onbekende transacties!")
+        ws.cell(row=1, column=1).font = Font(name="Arial", size=10, bold=True,
+                                              color=C_INC_HDR)
         return
 
-    headers = ["Datum", "Merchant", "Bedrag (€)", "Omschrijving",
-               "Jouw Categorie (vul in)"]
+    # Tip row
+    tip = ("Voeg een keyword toe aan rules.xlsx en herrun process.py "
+           "om deze merchants automatisch te categoriseren.")
+    ws.cell(row=1, column=1, value=tip)
+    ws.cell(row=1, column=1).font = Font(name="Arial", size=9, italic=True,
+                                          color="595959")
+    ws.merge_cells("A1:E1")
+    ws.row_dimensions[1].height = 14
+
+    headers = ["Merchant", "Aantal", "Totaal (EUR)",
+               "Voorbeeld omschrijving", "Jouw categorie (vul in)"]
     for c, h in enumerate(headers, 1):
-        ws.cell(row=1, column=c, value=h)
-    style_header(ws, 1, len(headers), bg="C55A11")
+        cell = ws.cell(row=2, column=c, value=h)
+        cell.fill = _fill("C55A11")
+        cell.font = Font(bold=True, color=WHITE, name="Arial", size=10)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[2].height = 20
 
-    unk_fill = PatternFill("solid", fgColor=C_UNKNOWN)
-    euro_fmt = '#,##0.00 "€";[Red]-#,##0.00 "€"'
+    grouped = (
+        unknowns.groupby("merchant", sort=False)
+        .agg(aantal=("amount", "count"),
+             totaal=("amount", "sum"),
+             voorbeeld=("description", "first"))
+        .reset_index()
+        .sort_values("totaal")      # most negative (biggest costs) first
+    )
 
-    for r, (_, row) in enumerate(unknowns.iterrows(), 2):
-        vals = [row["date"].date(), row["merchant"],
-                row["amount"], row["description"][:80], ""]
+    unk_fill = _fill(C_UNKNOWN)
+    euro_fmt = '#,##0.00 "EUR";[Red]-#,##0.00 "EUR"'
+
+    for r, (_, row) in enumerate(grouped.iterrows(), 3):
+        vals = [row["merchant"], int(row["aantal"]), row["totaal"],
+                str(row["voorbeeld"])[:80], ""]
         for c, v in enumerate(vals, 1):
             cell = ws.cell(row=r, column=c, value=v)
             cell.fill = unk_fill
             cell.font = Font(name="Arial", size=9)
             if c == 3:
                 cell.number_format = euro_fmt
+            if c == 5:
+                cell.font = Font(name="Arial", size=9, italic=True,
+                                  color="595959")
 
-    widths = [12, 28, 14, 55, 28]
-    for c, w in enumerate(widths, 1):
+    for c, w in enumerate([28, 8, 14, 55, 28], 1):
         ws.column_dimensions[get_column_letter(c)].width = w
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
-
-    ws.cell(row=1, column=5).font = Font(bold=True, color="FFFFFF",
-                                          name="Arial", size=10)
+    ws.auto_filter.ref = f"A2:{get_column_letter(len(headers))}2"
 
 
-def save_output(df):
+def save_output(df, year_label=""):
+    suffix = f" {year_label}" if year_label else ""
     wb = Workbook()
-    ws1 = wb.active
-    write_transactions_sheet(ws1, df)
-    ws2 = wb.create_sheet()
-    write_overview_sheet(ws2, df)
-    ws3 = wb.create_sheet()
-    write_unknowns_sheet(ws3, df)
 
-    now = datetime.now().strftime("%Y%m%d_%H%M")
-    out_path = os.path.join(OUTPUT_DIR, f"boekhouding_{now}.xlsx")
+    ws_tx = wb.active
+    write_transactions_sheet(ws_tx, df)
+    ws_tx.title = f"Transacties{suffix}"
+
+    ws_mo = wb.create_sheet()
+    write_overview_sheet(ws_mo, df, group_by="month")
+    ws_mo.title = f"Maand Overzicht{suffix}"
+
+    ws_js = wb.create_sheet()
+    write_jaar_samenvatting_sheet(ws_js, df, year_label=year_label)
+
+    ws_unk = wb.create_sheet()
+    write_unknowns_sheet(ws_unk, df)
+    ws_unk.title = f"Onbekend{suffix}"
+
+    if year_label:
+        filename = f"boekhouding_{year_label}.xlsx"
+    else:
+        now = datetime.now().strftime("%Y%m%d_%H%M")
+        filename = f"boekhouding_{now}.xlsx"
+
+    out_path = os.path.join(OUTPUT_DIR, filename)
     wb.save(out_path)
-    print(f"✅  Opgeslagen: {out_path}")
+    print(f"Opgeslagen: {out_path}")
     return out_path
 
 
 # ── Step 4: Create starter rules.xlsx ────────────────────────────────────────
 def create_starter_rules():
-    """Generate a starter rules.xlsx with sensible Dutch categories."""
     starter = [
-        # keyword              category
-        ("albert heijn",       "Boodschappen"),
-        ("dirk",               "Boodschappen"),
-        ("jumbo",              "Boodschappen"),
-        ("lidl",               "Boodschappen"),
-        ("ah ",                "Boodschappen"),
-        ("tuda fruta",         "Boodschappen"),
-        ("takeaway",           "Eten & Drinken"),
-        ("deliveroo",          "Eten & Drinken"),
-        ("ming kee",           "Eten & Drinken"),
-        ("cn bagijn",          "Eten & Drinken"),
-        ("koffiehuis",         "Eten & Drinken"),
-        ("crow-bar",           "Eten & Drinken"),
-        ("ls nine bar",        "Eten & Drinken"),
-        ("cafe",               "Eten & Drinken"),
-        ("tabakshop",          "Eten & Drinken"),
-        ("gogo tabak",         "Eten & Drinken"),
-        ("heilzaam",           "Gezondheid"),
-        ("apotheek",           "Gezondheid"),
-        ("unive",              "Verzekeringen"),
-        ("sportcity",          "Sport"),
-        ("david lloyd",        "Sport"),
-        ("ns groep",           "OV & Reizen"),
-        ("ns reizigers",       "OV & Reizen"),
-        ("bck*ns",             "OV & Reizen"),
-        ("den haag cs",        "OV & Reizen"),
-        ("youfone",            "Telefoon"),
-        ("belastingdienst",    "Vaste Lasten"),
-        ("abn amro",           "Bankkosten"),
-        ("hogeschool",         "Inkomen"),
-        ("salaris",            "Inkomen"),
-        ("huiver",             "Kamerhuur"),
-        ("sparen",             "Sparen"),
-        ("bol.com",            "Diversen"),
-        ("media markt",        "Diversen"),
-        ("laurenskerk",        "Diversen"),
-        ("primera",            "Diversen"),
+        # ── INKOMEN ──────────────────────────────────────────────────────────
+        ("salaris",                 "Salaris"),
+        ("hogeschool",              "Salaris"),
+        ("loon",                    "Salaris"),
+        ("duo",                     "DUO / Studiefinanciering"),
+        ("studiefinanciering",      "DUO / Studiefinanciering"),
+        ("zorgtoeslag",             "Zorgtoeslag"),
+        ("toeslagen",               "Zorgtoeslag"),
+        # ── VASTE LASTEN ─────────────────────────────────────────────────────
+        ("huiver",                  "Huur & Wonen"),
+        ("kamer",                   "Huur & Wonen"),
+        ("unive",                   "Zorgverzekering"),
+        ("cz ",                     "Zorgverzekering"),
+        ("zilveren kruis",          "Zorgverzekering"),
+        ("youfone",                 "Telefoon & Internet"),
+        ("t-mobile",                "Telefoon & Internet"),
+        ("abn amro",                "Bankkosten"),
+        ("spotify",                 "Abonnementen"),
+        ("netflix",                 "Abonnementen"),
+        ("ziggo",                   "Abonnementen"),
+        # ── DAGELIJKS ────────────────────────────────────────────────────────
+        ("albert heijn",            "Boodschappen"),
+        ("dirk",                    "Boodschappen"),
+        ("jumbo",                   "Boodschappen"),
+        ("lidl",                    "Boodschappen"),
+        ("ah ",                     "Boodschappen"),
+        ("tuda fruta",              "Boodschappen"),
+        ("takeaway",                "Eten & Drinken"),
+        ("deliveroo",               "Eten & Drinken"),
+        ("ming kee",                "Eten & Drinken"),
+        ("cn bagijn",               "Eten & Drinken"),
+        ("koffiehuis",              "Eten & Drinken"),
+        ("crow-bar",                "Eten & Drinken"),
+        ("ls nine bar",             "Eten & Drinken"),
+        ("cafe",                    "Eten & Drinken"),
+        ("ns groep",                "OV & Reizen"),
+        ("ns reizigers",            "OV & Reizen"),
+        ("bck*ns",                  "OV & Reizen"),
+        ("den haag cs",             "OV & Reizen"),
+        ("sportcity",               "Sport & Fitness"),
+        ("david lloyd",             "Sport & Fitness"),
+        ("bol.com",                 "Online Winkelen"),
+        ("media markt",             "Online Winkelen"),
+        ("heilzaam",                "Gezondheid"),
+        ("apotheek",                "Gezondheid"),
+        ("tabakshop",               "Tabak"),
+        ("gogo tabak",              "Tabak"),
+        ("laurenskerk",             "Cultuur & Entertainment"),
+        # ── OVERIG ───────────────────────────────────────────────────────────
+        ("sparen",                  "Sparen"),
+        ("belastingdienst",         "Diversen"),
+        ("primera",                 "Diversen"),
     ]
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Rules"
-
     ws.cell(row=1, column=1, value="keyword")
     ws.cell(row=1, column=2, value="category")
-    hdr_fill = PatternFill("solid", fgColor=C_HEADER)
-    hdr_font = Font(bold=True, color=WHITE, name="Arial")
     for c in [1, 2]:
-        ws.cell(row=1, column=c).fill = hdr_fill
-        ws.cell(row=1, column=c).font = hdr_font
+        ws.cell(row=1, column=c).fill = _fill(C_HEADER)
+        ws.cell(row=1, column=c).font = Font(bold=True, color=WHITE, name="Arial")
 
     for r, (kw, cat) in enumerate(starter, 2):
         ws.cell(row=r, column=1, value=kw)
@@ -486,67 +872,94 @@ def create_starter_rules():
     instructions = [
         ("Hoe werkt rules.xlsx?", ""),
         ("", ""),
-        ("keyword",  "De tekst die gezocht wordt in de merchant naam (niet hoofdlettergevoelig)"),
-        ("category", "De post/categorie die je aan die transactie wilt geven"),
+        ("keyword",  "De tekst in de merchant naam (niet hoofdlettergevoelig, deelwoord)"),
+        ("category", "De post die je aan die transactie wilt geven"),
         ("", ""),
         ("Tips:", ""),
-        ("• Volgorde telt",     "De EERSTE match wint. Zet specifieke regels bovenaan."),
-        ("• Deelwoorden",       "\"albert heijn\" matcht ook \"Albert Heijn 1870\""),
-        ("• Inkomen",           "Gebruik categorie \"Inkomen\" voor positieve bedragen"),
-        ("• Nieuw toevoegen",   "Voeg gewoon een rij toe aan het Rules tabblad"),
+        ("Volgorde telt",      "De EERSTE match wint — zet specifieke regels bovenaan"),
+        ("Inkomsten",          "Gebruik 'Salaris', 'DUO / Studiefinanciering' etc."),
+        ("Nieuw toevoegen",    "Voeg een rij toe aan het Rules tabblad en herrun"),
     ]
     for r, (a, b) in enumerate(instructions, 1):
         ws2.cell(row=r, column=1, value=a).font = Font(bold=(r == 1), name="Arial")
         ws2.cell(row=r, column=2, value=b).font = Font(name="Arial")
     ws2.column_dimensions["A"].width = 22
-    ws2.column_dimensions["B"].width = 60
-
+    ws2.column_dimensions["B"].width = 65
     wb.save(RULES_FILE)
-    print(f"✅  Starter rules.xlsx aangemaakt: {RULES_FILE}")
-    print("    Open het bestand, pas de categorieën aan en voer process.py opnieuw uit.")
+    print(f"Starter rules.xlsx aangemaakt: {RULES_FILE}")
 
 
 # ── Step 5: Migrate existing rules.xlsx to new category names ────────────────
 CATEGORY_MIGRATION = {
-    "inkomsten":                "Inkomen",
-    "eten & drinken buiten":    "Eten & Drinken",
-    "koffie & café":            "Eten & Drinken",
-    "koffie & cafe":            "Eten & Drinken",
-    "ov & reizen":              "OV & Reizen",
-    "sport & fitness":          "Sport",
-    "telefoon & internet":      "Telefoon",
-    "huur & wonen":             "Kamerhuur",
-    "belastingen":              "Vaste Lasten",
-    "online winkelen":          "Diversen",
-    "gezondheid & apotheek":    "Gezondheid",
-    "tabak":                    "Eten & Drinken",
-    "cultuur & entertainment":  "Diversen",
+    "inkomen":                   "Salaris",
+    "inkomsten":                 "Salaris",
+    "inkomsten overig":          "Inkomsten Overig",
+    "verzekeringen":             "Zorgverzekering",
+    "telefoon":                  "Telefoon & Internet",
+    "kamerhuur":                 "Huur & Wonen",
+    "huur & wonen":              "Huur & Wonen",
+    "vaste lasten":              "Abonnementen",
+    "belastingen":               "Diversen",
+    "sport":                     "Sport & Fitness",
+    "ov & reizen":               "OV & Reizen",
+    "gezondheid":                "Gezondheid",
+    "boodschappen":              "Boodschappen",
+    "eten & drinken":            "Eten & Drinken",
+    "bankkosten":                "Bankkosten",
+    "diversen":                  "Diversen",
+    "sparen":                    "Sparen",
+    "online winkelen":           "Online Winkelen",
+    "cultuur & entertainment":   "Cultuur & Entertainment",
+}
+
+KEYWORD_OVERRIDES = {
+    "tabakshop":         "Tabak",
+    "gogo tabak":        "Tabak",
+    "bol.com":           "Online Winkelen",
+    "media markt":       "Online Winkelen",
+    "laurenskerk":       "Cultuur & Entertainment",
+    "belastingdienst":   "Diversen",
+    "sportcity":         "Sport & Fitness",
+    "david lloyd":       "Sport & Fitness",
+    "youfone":           "Telefoon & Internet",
+    "unive":             "Zorgverzekering",
+    "huiver":            "Huur & Wonen",
+    "hogeschool":        "Salaris",
+    "salaris":           "Salaris",
+    "abn amro":          "Bankkosten",
 }
 
 
 def migrate_rules():
-    """Update existing rules.xlsx category names to the new kasboek style."""
+    """Update existing rules.xlsx to the new category taxonomy."""
     if not os.path.exists(RULES_FILE):
-        print("⚠️   Geen rules.xlsx gevonden – niets te migreren.")
+        print("Geen rules.xlsx gevonden.")
         return
 
     wb = load_workbook(RULES_FILE)
     if "Rules" not in wb.sheetnames:
-        print("⚠️   Geen 'Rules' tabblad gevonden in rules.xlsx.")
+        print("Geen 'Rules' tabblad gevonden in rules.xlsx.")
         return
 
-    ws = wb["Rules"]
+    ws      = wb["Rules"]
     changed = 0
     for row in ws.iter_rows(min_row=2):
-        cat_cell = row[1]  # column B = category
-        old_val  = str(cat_cell.value or "").strip()
-        new_val  = CATEGORY_MIGRATION.get(old_val.lower())
-        if new_val and new_val != old_val:
-            cat_cell.value = new_val
+        kw_cell  = row[0]
+        cat_cell = row[1]
+        kw  = str(kw_cell.value  or "").strip().lower()
+        old = str(cat_cell.value or "").strip()
+
+        if kw in KEYWORD_OVERRIDES:
+            new = KEYWORD_OVERRIDES[kw]
+        else:
+            new = CATEGORY_MIGRATION.get(old.lower(), old)
+
+        if new != old:
+            cat_cell.value = new
             changed += 1
 
     wb.save(RULES_FILE)
-    print(f"✅  rules.xlsx bijgewerkt: {changed} categorie(ën) hernoemd")
+    print(f"rules.xlsx bijgewerkt: {changed} categorie(en) hernoemd")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -556,37 +969,63 @@ def main():
         return
 
     if "--create-rules" in sys.argv or not os.path.exists(RULES_FILE):
-        print("📋  Starter rules.xlsx aanmaken …")
+        print("Starter rules.xlsx aanmaken ...")
         create_starter_rules()
         if "--create-rules" in sys.argv:
             return
 
-    print("\n🏦  ABN AMRO Bookkeeping Processor")
-    print("=" * 40)
+    # ── Parse --year flag ─────────────────────────────────────────────────────
+    year_filter = None
+    if "--year" in sys.argv:
+        idx = sys.argv.index("--year")
+        if idx + 1 < len(sys.argv):
+            year_filter = sys.argv[idx + 1]
+
+    print("\nABN AMRO Bookkeeping Processor")
+    print("=" * 38)
+    if year_filter:
+        print(f"Jaar filter: {year_filter}")
 
     files = find_input_files()
     df    = load_transactions(files)
+
+    if year_filter:
+        df = df[df["year"] == year_filter].reset_index(drop=True)
+        if df.empty:
+            sys.exit(f"Geen transacties gevonden voor jaar {year_filter}")
+        print(f"Gefilterd op {year_filter}: {len(df)} transacties")
+
     rules = load_rules()
     df    = apply_categories(df, rules)
+    df    = detect_internal_transfers(df)
+    out   = save_output(df, year_label=year_filter or "")
 
-    out = save_output(df)
+    # ── Terminal summary ──────────────────────────────────────────────────────
+    df_real = df[df["category"] != "Interne Overboeking"]
+    print()
+    for m in sorted(df_real["month"].unique()):
+        mdf  = df_real[df_real["month"] == m]
+        inc  = mdf[mdf["category"].isin(INCOME_CATS)]["amount"].sum()
+        vl   = mdf[mdf["category"].isin(VASTE_LASTEN_CATS)]["amount"].sum()
+        dag  = mdf[mdf["category"].isin(DAGELIJKS_CATS)]["amount"].sum()
+        net  = mdf["amount"].sum()
+        yr, mo = m.split("-")
+        label  = f"{MAANDEN_NL[int(mo)]} {yr}"
+        print(f"  {label:<10}  |  in: {dutch_euros(inc):<10}"
+              f"  |  vaste lasten: {dutch_euros(vl):<10}"
+              f"  |  dagelijks: {dutch_euros(dag):<10}"
+              f"  |  netto: {dutch_euros(net)}")
 
-    months_sorted = sorted(df["month"].unique())
-    print("\n📊  Maandoverzicht:")
-    print(f"    {'Maand':<10}  {'Inkomsten':>12}  {'Uitgaven':>12}  {'Netto':>12}")
-    print("    " + "─" * 54)
-    for m in months_sorted:
-        mdf = df[df["month"] == m]
-        inc = mdf[mdf["amount"] > 0]["amount"].sum()
-        exp = mdf[mdf["amount"] < 0]["amount"].sum()
-        net = mdf["amount"].sum()
-        print(f"    {m:<10}  €{inc:>10,.2f}  €{exp:>10,.2f}  €{net:>10,.2f}")
-    print("    " + "─" * 54)
-    t_inc = df[df["amount"] > 0]["amount"].sum()
-    t_exp = df[df["amount"] < 0]["amount"].sum()
-    t_net = df["amount"].sum()
-    print(f"    {'Totaal':<10}  €{t_inc:>10,.2f}  €{t_exp:>10,.2f}  €{t_net:>10,.2f}")
-    print(f"\n    Output → {out}\n")
+    t_inc = df_real[df_real["category"].isin(INCOME_CATS)]["amount"].sum()
+    t_vl  = df_real[df_real["category"].isin(VASTE_LASTEN_CATS)]["amount"].sum()
+    t_dag = df_real[df_real["category"].isin(DAGELIJKS_CATS)]["amount"].sum()
+    t_net = df_real["amount"].sum()
+    print("  " + "-" * 80)
+    print(f"  {'Totaal':<10}  |  in: {dutch_euros(t_inc):<10}"
+          f"  |  vaste lasten: {dutch_euros(t_vl):<10}"
+          f"  |  dagelijks: {dutch_euros(t_dag):<10}"
+          f"  |  netto: {dutch_euros(t_net)}")
+    print(f"\n  Output: {out}\n")
 
 
 if __name__ == "__main__":

@@ -1,93 +1,103 @@
 # Finance — Personal Bookkeeping System
 
-Personal finance automation for ABN AMRO bank accounts.
+Personal finance automation for ABN AMRO bank accounts. Replaces manual Excel kasboek.
 
-## What this does
+## Quick start
 
-Downloads from ABN AMRO → Python script → Clean Excel with:
-- All transactions auto-categorised
-- Monthly overview per category (income vs expenses)
-- Flagged unknowns to review
+```bash
+cd bookkeeping
+pip install pandas openpyxl   # first time only
+
+python process.py              # process all TAB files in input/
+python process.py --year 2025  # process only 2025 transactions
+```
+
+Drop `.TAB` files in `bookkeeping/input/` first (gitignored). Output lands in `bookkeeping/output/`.
+
+> **Windows terminal note:** use `python -X utf8 process.py` if you get encoding errors.
+
+---
+
+## What it produces
+
+One Excel file with 4 sheets:
+
+| Sheet | Contents |
+|-------|----------|
+| Transacties | All transactions, date-sorted, auto-filter, colour-coded by type |
+| Maand Overzicht | Income/expense by category, columns = months, totals + average |
+| Jaar Samenvatting | Full-year totals per category + % van inkomen |
+| Onbekend | Unknown merchants grouped, sorted by amount — fill in categories here |
+
+---
+
+## Input format
+
+ABN AMRO → Internetbankieren → Bij/Afschriften → Exporteren → **Excel (TXT)**
+
+Saves as a `.TAB` file. Tab-separated, 8 columns, no header:
+
+| Col | Field | Example |
+|-----|-------|---------|
+| 0 | Account number | 536542171 |
+| 1 | Currency | EUR |
+| 2 | Date (YYYYMMDD) | 20250321 |
+| 3 | Balance before | 211,90 |
+| 4 | Balance after | 192,48 |
+| 5 | Value date | 20250321 |
+| 6 | Amount (comma decimal) | -19,42 |
+| 7 | Description | BEA, Apple Pay   Albert Heijn 1870... |
+
+Multiple accounts or files in one run are fine — duplicates are removed automatically.
+
+**Two accounts (betaalrekening + spaarrekening):** transfers between them are detected and tagged as *Interne Overboeking* — they appear in Transacties but are excluded from all totals and netto calculations.
+
+---
+
+## Categories
+
+Defined in `rules.xlsx` (Sheet: **Rules**). Rules use case-insensitive keyword matching on the merchant name. First match wins — put specific rules above general ones.
+
+### INKOMEN
+`Salaris` · `DUO / Studiefinanciering` · `Zorgtoeslag` · `Familie & Giften` · `Inkomsten Overig`
+
+### VASTE LASTEN
+`Huur & Wonen` · `Zorgverzekering` · `Telefoon & Internet` · `Bankkosten` · `Abonnementen`
+
+### DAGELIJKSE UITGAVEN
+`Boodschappen` · `Eten & Drinken` · `OV & Reizen` · `Sport & Fitness` · `Online Winkelen` · `Kleding` · `Gezondheid` · `Tabak` · `Cultuur & Entertainment` · `Studie`
+
+### OVERIG
+`Sparen` · `Diversen`
+
+To fix an unknown: add a row to `rules.xlsx` → Sheet Rules → keyword + category. Re-run the script.
+
+---
+
+## Other flags
+
+```bash
+python process.py --create-rules   # regenerate rules.xlsx from scratch (overwrites!)
+python process.py --migrate-rules  # rename old category names to new system
+```
+
+---
 
 ## Folder structure
 
 ```
 finance/
-├── bookkeeping/
-│   ├── process.py        # Main script — run this each month
-│   ├── rules.xlsx        # Categorisation rules (edit this to add/fix categories)
-│   ├── input/            # Drop your .TAB file here (gitignored)
-│   └── output/           # Excel output appears here (gitignored)
-└── README.md
+└── bookkeeping/
+    ├── process.py           ← main script
+    ├── rules.xlsx           ← categorisation rules (edit to add/fix categories)
+    ├── CLAUDE.md            ← context file for Claude Code sessions
+    ├── input/               ← drop .TAB files here (gitignored)
+    ├── output/              ← Excel output lands here (gitignored)
+    └── InfoFiles/
+        └── Jaaroverzichten_kasboekken.xlsx  ← old manual kasboek (reference)
 ```
 
-## How to run
-
-```bash
-cd bookkeeping
-python process.py
-```
-
-First time setup:
-```bash
-pip install pandas openpyxl
-```
-
-## Input format
-
-ABN AMRO export → **Excel (TXT)** format → saves as `.TAB` file.
-Download via: Internetbankieren → Bij/Afschriften → Exporteren → Excel (TXT)
-
-The file is tab-separated with 8 columns (no header):
-| Col | Field | Example |
-|-----|-------|---------|
-| 0 | Account number | 536542171 |
-| 1 | Currency | EUR |
-| 2 | Date | 20260321 |
-| 3 | Balance before | 211,90 |
-| 4 | Balance after | 192,48 |
-| 5 | Value date | 20260321 |
-| 6 | Amount | -19,42 |
-| 7 | Description | BEA, Apple Pay   Albert Heijn 1870... |
-
-Multiple accounts can be exported into one file or separate files — script handles both.
-
-## Categories
-
-Defined in `rules.xlsx` → Sheet: **Rules**
-
-| Category | What goes in it |
-|----------|----------------|
-| Inkomsten | Salary, DUO, family transfers in |
-| Huur & Wonen | Rent, service costs |
-| Boodschappen | Albert Heijn, Jumbo, Dirk |
-| Eten & Drinken | Restaurants, cafés, takeaway |
-| OV & Reizen | NS, bus, train, travel |
-| Sport & Fitness | Sportcity, David Lloyd, gym |
-| Verzekeringen | Zorgverzekering, UNIVE |
-| Telefoon & Internet | Youfone, Odido, Tele2 |
-| Bankkosten | ABN AMRO fees |
-| Online Winkelen | Bol.com, Media Markt |
-| Tabak | Tabakshop, GoGo |
-| Cultuur & Entertainment | Concerts, museums, events |
-| Sparen | Transfers to savings account |
-| Diversen | Everything else |
-
-Rules use **keyword matching** (case-insensitive, partial match). First match wins — put specific rules above general ones.
-
-## History / context
-
-- Previously tracked manually in Excel kasboek (see `Copy_of_Jaaroverzichten_kasboekken.xlsx`)
-- Old kasboek had categories: BS, PV, wbw, Uit, OV, Studie, Huur, Telefoon, Zorgverzekering, Gym
-- Spaarpotjes tracked separately: Apparaten, Noodfonds, SpaarRing, Kleding, Trips etc.
-- This script replaces the manual work — same categories, fully automated
-
-## Known issues / TODO
-
-- [ ] 15 transactions still uncategorised from first run — need rules added
-- [ ] Spaarpotjes (savings goals) not yet integrated
-- [ ] Second bank account not yet tested
-- [ ] Would be nice: auto-feedback loop (fill in unknowns → auto-adds to rules)
+---
 
 ## Owner
 
