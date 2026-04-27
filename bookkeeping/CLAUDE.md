@@ -155,6 +155,9 @@ Keuzes die niet uit de code zelf blijken — bewaar dit voor toekomstige sessies
 | Output naar Drive-map als die bestaat | Automatische sync naar Google Drive zonder extra stap |
 | `--year YYYY` filter | Verwerkt één jaar zonder andere data aan te raken; geeft schone Excel per jaar |
 | Stijl in module-niveau constanten | Één plek voor kleuren/fonts — geen magic values door de code heen |
+| Prompt design rule | One task per prompt, explicit file list, explicit exclusions, one test command, one commit. Prevents freezing. |
+| File size limit | Any file Claude Code reads regularly: max ~150 lines. Over 300 lines and touched every session → split it. |
+| README vs CLAUDE.md | README = for humans who've never seen the project. CLAUDE.md = for Claude Code starting fresh. Never mix audiences. |
 
 ---
 
@@ -184,6 +187,27 @@ Keuzes die niet uit de code zelf blijken — bewaar dit voor toekomstige sessies
 See `BACKLOG.md` in the repo root.
 Do NOT read it unless explicitly asked to.
 Current focus: see "Now" section in BACKLOG.md.
+
+---
+
+## Architecture decisions pending
+
+These must be decided before building phase 2+ modules.
+Decide in the session that starts that phase — not before.
+
+**Storage layer (decide before receipt_scanner.py)**
+Current: Excel is both database and output format.
+Option A: keep as-is — simple, no new dependencies
+Option B: SQLite as database, Excel as export only
+  Pros: cross-year queries, dashboard-ready, faster lookups
+  Cons: adds complexity, requires migration of existing output
+Trigger to choose B: if you need to query across years or
+build a dashboard that updates without rerunning process.py
+
+**Context window budget per session**
+No single file read by Claude Code should exceed ~150 lines.
+Current violations: process.py (~1000 lines) → refactor first.
+Rule: if a file is over 300 lines and touched every session, split it.
 
 ---
 
