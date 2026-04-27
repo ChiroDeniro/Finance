@@ -169,16 +169,30 @@ Keuzes die niet uit de code zelf blijken — bewaar dit voor toekomstige sessies
 - Dual-account support: internal transfers between betaalrekening (536542171) and spaarrekening (844835730) are detected and excluded from netto
 - 35 categorisation rules covering the main recurring merchants
 - Terminal summary per month: inkomen | vaste lasten | dagelijks | netto
+- Output auto-saves to `C:\Users\chris\Documents\Finance\Kasboek\` if that Drive-synced folder exists
 
 ### Work in progress
-- **2025 full-year rules gap-fill**: first run gives ~49% coverage (637/1298 tx). The "Onbekend" sheet in `output/boekhouding_2025.xlsx` has the grouped unknowns. Next session: open that sheet, add missing keywords to `rules.xlsx`, rerun until ≥90%.
-- Known gaps: salary/income keywords probably don't match 2025 merchant names; some recurring costs unmatched.
+- **2025 full-year rules gap-fill**: current run gives **56% coverage (725/1298 tx)**, 573 uncategorised remain.
+- **Inkomen = €0 for Jan–Sep 2025** — salary/income SEPA rules not matching. Top priority: add rules for the merchants below.
+- **process.py has uncommitted category changes** (249-line diff) — category names diverge from what's documented in CLAUDE.md. Commit or revert before next session.
+
+### Top unknowns to fix (open `Onbekend 2025` sheet, add keywords to rules.xlsx)
+| Priority | Merchant | Count | Amount | Likely category |
+|----------|----------|-------|--------|-----------------|
+| 1 | J.P.Q. Hoyng — Huur SJ 109 | 12 | -€5,851 | Huur & Wonen |
+| 2 | D. van Rhijn e | 7 | +€5,200 | Salaris / Inkomsten Overig |
+| 3 | Optimal Solutions | 3 | +€4,200 | Salaris |
+| 4 | Dhr. C. van Rhijn | 1 | +€1,800 | Salaris / Inkomsten Overig |
+| 5 | Christiaan Van Rhijn — WDR leeg | 1 | +€1,705 | Inkomsten Overig |
+| 6 | RHIJN D VAN en | 1 | -€1,050 | Diversen |
+| 7 | Revolut (eCom Apple Pay) | 3 | -€400 | Dagelijks Overig |
 
 ### Next session checklist
-1. Open `output/boekhouding_2025.xlsx` → sheet "Onbekend"
-2. Add missing rules to `rules.xlsx` for top unknown merchants
-3. Rerun `python -X utf8 process.py --year 2025` until ≥90% coverage
-4. Commit final `rules.xlsx` and output notes
+1. Decide: commit or revert uncommitted process.py changes (category rename)
+2. Open `boekhouding_2025.xlsx` → sheet `Onbekend 2025`
+3. Add missing SEPA NAME keywords to `rules.xlsx` — start with rows 1–5 in table above
+4. Rerun `python -X utf8 process.py --year 2025` until ≥90% coverage
+5. Commit `rules.xlsx` and updated output notes
 
 ---
 
