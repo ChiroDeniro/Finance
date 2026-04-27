@@ -24,8 +24,11 @@ from openpyxl.utils import get_column_letter
 # ── Paths ─────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 INPUT_DIR  = os.path.join(BASE_DIR, "input")
-OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 RULES_FILE = os.path.join(BASE_DIR, "rules.xlsx")
+
+# Save to Drive-synced folder if it exists, otherwise local output/
+_DRIVE_DIR = r"C:\Users\chris\Documents\Finance\Kasboek"
+OUTPUT_DIR = _DRIVE_DIR if os.path.isdir(_DRIVE_DIR) else os.path.join(BASE_DIR, "output")
 
 os.makedirs(INPUT_DIR,  exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -39,23 +42,27 @@ INCOME_CATS = [
     "Inkomsten Overig",
 ]
 VASTE_LASTEN_CATS = [
-    "Huur & Wonen",
+    "Huur",
+    "Inclusief Huur",
     "Zorgverzekering",
     "Telefoon & Internet",
     "Bankkosten",
     "Abonnementen",
+    "Sport & Fitness",
+    "Onderhoud",
 ]
 DAGELIJKS_CATS = [
     "Boodschappen",
     "Eten & Drinken",
+    "Uitgaan",
     "OV & Reizen",
-    "Sport & Fitness",
-    "Online Winkelen",
     "Kleding",
+    "Kapper",
     "Gezondheid",
-    "Tabak",
+    "WbW",
     "Cultuur & Entertainment",
     "Studie",
+    "Dagelijks Overig",
 ]
 OVERIG_CATS = ["Sparen", "Diversen"]
 
@@ -191,10 +198,16 @@ def load_transactions(files):
 
 def extract_merchant(desc):
     desc = str(desc).strip()
+    # BEA / Apple Pay pin transaction
     m = re.search(r"BEA,.*?\s{2,}(.+?),PAS", desc)
     if m:
         return m.group(1).strip()
+    # Standard SEPA /NAME/ format
     m = re.search(r"/NAME/([^/]+)", desc)
+    if m:
+        return m.group(1).strip()
+    # SEPA Incasso "Naam: ..." format (e.g. NS GROEP, gym subscriptions)
+    m = re.search(r"Naam:\s*([^\t\n/,]+)", desc)
     if m:
         return m.group(1).strip()
     if "ABN AMRO" in desc.upper():
@@ -280,7 +293,7 @@ def write_transactions_sheet(ws, df):
     unk_fill = _fill(C_UNKNOWN)
     inc_fill = _fill(C_INC_ROW)
     alt_fill = _fill(C_ALT_ROW)
-    euro_fmt = '#,##0.00 "EUR";[Red]-#,##0.00 "EUR"'
+    euro_fmt = '€ #,##0.00;-€ #,##0.00'
 
     for r, (_, row) in enumerate(df.iterrows(), 2):
         is_unk    = row["category"] == "Onbekend"
@@ -330,7 +343,7 @@ def write_overview_sheet(ws, df, group_by="month"):
     tot_col    = n + 2
     gem_col    = n + 3 if group_by == "month" else None
     last_col   = gem_col or tot_col
-    euro_fmt   = '#,##0 "EUR";[Red]-#,##0 "EUR"'
+    euro_fmt   = '€ #,##0;-€ #,##0'
 
     # Pivot for lookups (exclude non-real categories)
     EXCLUDE_FROM_OVERVIEW = {"Onbekend", "Interne Overboeking"}
@@ -380,29 +393,28 @@ def write_overview_sheet(ws, df, group_by="month"):
         ws.row_dimensions[r].height = 16
         row_num[0] += 1
 
-    def _data_row(cat, row_color):
+    def _data_row(cat, _unused_color=None):
         r = row_num[0]
-        fill = _fill(row_color)
-        ws.cell(row=r, column=1, value=cat).fill = fill
+        ws.cell(row=r, column=1, value=cat)
         ws.cell(row=r, column=1).font = Font(name="Arial", size=9)
         total = 0.0
         for c, p in enumerate(periods, 2):
             v    = _val(cat, p)
             cell = ws.cell(row=r, column=c, value=round(v))
             cell.number_format = euro_fmt
-            cell.fill = fill
             cell.font = Font(name="Arial", size=9)
+            cell.alignment = Alignment(horizontal="right")
             total += v
         tc = ws.cell(row=r, column=tot_col, value=round(total))
         tc.number_format = euro_fmt
-        tc.fill = fill
         tc.font = Font(bold=True, name="Arial", size=9)
+        tc.alignment = Alignment(horizontal="right")
         if gem_col:
             avg = total / n if n else 0
             gc = ws.cell(row=r, column=gem_col, value=round(avg))
             gc.number_format = euro_fmt
-            gc.fill = fill
             gc.font = Font(italic=True, name="Arial", size=9)
+            gc.alignment = Alignment(horizontal="right")
         row_num[0] += 1
 
     def _subtotal_row(label, cats, color):
@@ -557,7 +569,7 @@ def write_jaar_samenvatting_sheet(ws, df, year_label=""):
     ws.title = f"Jaar Samenvatting{' ' + year_label if year_label else ''}"
     ws.freeze_panes = "B2"
 
-    euro_fmt = '#,##0 "EUR";[Red]-#,##0 "EUR"'
+    euro_fmt = '€ #,##0;-€ #,##0'
     pct_fmt  = '0.0"%"'
 
     EXCLUDE = {"Onbekend", "Interne Overboeking"}
@@ -595,20 +607,19 @@ def write_jaar_samenvatting_sheet(ws, df, year_label=""):
         ws.row_dimensions[r].height = 16
         row_num[0] += 1
 
-    def _data_row(cat, row_color):
-        r    = row_num[0]
-        fill = _fill(row_color)
-        val  = cat_totals.get(cat, 0.0)
-        ws.cell(row=r, column=1, value=cat).fill = fill
+    def _data_row(cat, _unused_color=None):
+        r   = row_num[0]
+        val = cat_totals.get(cat, 0.0)
+        ws.cell(row=r, column=1, value=cat)
         ws.cell(row=r, column=1).font = Font(name="Arial", size=9)
         tc = ws.cell(row=r, column=2, value=round(val))
         tc.number_format = euro_fmt
-        tc.fill = fill
         tc.font = Font(name="Arial", size=9)
+        tc.alignment = Alignment(horizontal="right")
         pc = ws.cell(row=r, column=3, value=_pct(val))
         pc.number_format = pct_fmt
-        pc.fill = fill
         pc.font = Font(italic=True, name="Arial", size=9)
+        pc.alignment = Alignment(horizontal="right")
         row_num[0] += 1
 
     def _subtotal(label, cats, color):
@@ -744,7 +755,7 @@ def write_unknowns_sheet(ws, df):
     )
 
     unk_fill = _fill(C_UNKNOWN)
-    euro_fmt = '#,##0.00 "EUR";[Red]-#,##0.00 "EUR"'
+    euro_fmt = '€ #,##0.00;-€ #,##0.00'
 
     for r, (_, row) in enumerate(grouped.iterrows(), 3):
         vals = [row["merchant"], int(row["aantal"]), row["totaal"],
@@ -807,8 +818,8 @@ def create_starter_rules():
         ("zorgtoeslag",             "Zorgtoeslag"),
         ("toeslagen",               "Zorgtoeslag"),
         # ── VASTE LASTEN ─────────────────────────────────────────────────────
-        ("huiver",                  "Huur & Wonen"),
-        ("kamer",                   "Huur & Wonen"),
+        ("huiver",                  "Huur"),
+        ("kamer",                   "Huur"),
         ("unive",                   "Zorgverzekering"),
         ("cz ",                     "Zorgverzekering"),
         ("zilveren kruis",          "Zorgverzekering"),
@@ -818,6 +829,8 @@ def create_starter_rules():
         ("spotify",                 "Abonnementen"),
         ("netflix",                 "Abonnementen"),
         ("ziggo",                   "Abonnementen"),
+        ("sportcity",               "Sport & Fitness"),
+        ("david lloyd",             "Sport & Fitness"),
         # ── DAGELIJKS ────────────────────────────────────────────────────────
         ("albert heijn",            "Boodschappen"),
         ("dirk",                    "Boodschappen"),
@@ -833,18 +846,16 @@ def create_starter_rules():
         ("crow-bar",                "Eten & Drinken"),
         ("ls nine bar",             "Eten & Drinken"),
         ("cafe",                    "Eten & Drinken"),
+        ("tabakshop",               "Eten & Drinken"),
+        ("gogo tabak",              "Eten & Drinken"),
         ("ns groep",                "OV & Reizen"),
         ("ns reizigers",            "OV & Reizen"),
         ("bck*ns",                  "OV & Reizen"),
         ("den haag cs",             "OV & Reizen"),
-        ("sportcity",               "Sport & Fitness"),
-        ("david lloyd",             "Sport & Fitness"),
-        ("bol.com",                 "Online Winkelen"),
-        ("media markt",             "Online Winkelen"),
+        ("bol.com",                 "Dagelijks Overig"),
+        ("media markt",             "Dagelijks Overig"),
         ("heilzaam",                "Gezondheid"),
         ("apotheek",                "Gezondheid"),
-        ("tabakshop",               "Tabak"),
-        ("gogo tabak",              "Tabak"),
         ("laurenskerk",             "Cultuur & Entertainment"),
         # ── OVERIG ───────────────────────────────────────────────────────────
         ("sparen",                  "Sparen"),
@@ -896,8 +907,8 @@ CATEGORY_MIGRATION = {
     "inkomsten overig":          "Inkomsten Overig",
     "verzekeringen":             "Zorgverzekering",
     "telefoon":                  "Telefoon & Internet",
-    "kamerhuur":                 "Huur & Wonen",
-    "huur & wonen":              "Huur & Wonen",
+    "kamerhuur":                 "Huur",
+    "huur & wonen":              "Huur",
     "vaste lasten":              "Abonnementen",
     "belastingen":               "Diversen",
     "sport":                     "Sport & Fitness",
@@ -908,22 +919,23 @@ CATEGORY_MIGRATION = {
     "bankkosten":                "Bankkosten",
     "diversen":                  "Diversen",
     "sparen":                    "Sparen",
-    "online winkelen":           "Online Winkelen",
+    "online winkelen":           "Dagelijks Overig",
+    "tabak":                     "Eten & Drinken",
     "cultuur & entertainment":   "Cultuur & Entertainment",
 }
 
 KEYWORD_OVERRIDES = {
-    "tabakshop":         "Tabak",
-    "gogo tabak":        "Tabak",
-    "bol.com":           "Online Winkelen",
-    "media markt":       "Online Winkelen",
+    "tabakshop":         "Eten & Drinken",
+    "gogo tabak":        "Eten & Drinken",
+    "bol.com":           "Dagelijks Overig",
+    "media markt":       "Dagelijks Overig",
     "laurenskerk":       "Cultuur & Entertainment",
     "belastingdienst":   "Diversen",
     "sportcity":         "Sport & Fitness",
     "david lloyd":       "Sport & Fitness",
     "youfone":           "Telefoon & Internet",
     "unive":             "Zorgverzekering",
-    "huiver":            "Huur & Wonen",
+    "huiver":            "Huur",
     "hogeschool":        "Salaris",
     "salaris":           "Salaris",
     "abn amro":          "Bankkosten",
