@@ -19,13 +19,18 @@ Goal: replace manual Excel kasboek with a fully automated system.
 finance/
 ├── CLAUDE.md                          ← you are here
 ├── README.md                          ← human-readable project overview
+├── README_PROMPTS.md                  ← bewezen prompts per taak
 └── bookkeeping/
-    ├── process.py                     ← main script, run this each month
-    ├── rules.xlsx                     ← categorisation rules (keyword → category)
-    ├── input/                         ← drop .TAB files here (gitignored)
-    ├── output/                        ← Excel output lands here (gitignored)
+    ├── process.py                     ← hoofdscript — bankbestanden verwerken
+    ├── receipt_scanner.py             ← (gepland) bonnetjes OCR en matching
+    ├── tax_report.py                  ← (gepland) belastingaangifte overzicht
+    ├── annual_report.py               ← (gepland) jaarverslag en prognose
+    ├── rules.xlsx                     ← categorisatieregels (keyword → categorie)
+    ├── input/                         ← drop .TAB bestanden hier (gitignored)
+    ├── receipts/                      ← drop bonnetjes/facturen hier (gitignored)
+    ├── output/                        ← alle Excel outputs (gitignored)
     └── InfoFiles/
-        └── Jaaroverzichten_kasboekken.xlsx  ← old manual kasboek (reference/inspiration)
+        └── Jaaroverzichten_kasboekken.xlsx  ← oud kasboek 2023 (referentie)
 ```
 
 ---
@@ -138,6 +143,21 @@ When `--year YYYY` is used, the output file is named `boekhouding_YYYY.xlsx` and
 
 ---
 
+## Ontwerpbeslissingen
+
+Keuzes die niet uit de code zelf blijken — bewaar dit voor toekomstige sessies.
+
+| Keuze | Reden |
+|-------|-------|
+| Alleen `pandas` + `openpyxl` | Geen zware deps, geen API-sleutels, werkt offline |
+| Keyword-matching i.p.v. ML | Regels zijn zichtbaar in rules.xlsx, deterministisch, makkelijk te debuggen |
+| Interne overboeking op bedrag+datum | Omschrijving varieert; alleen bedrag+datum is betrouwbaar |
+| Output naar Drive-map als die bestaat | Automatische sync naar Google Drive zonder extra stap |
+| `--year YYYY` filter | Verwerkt één jaar zonder andere data aan te raken; geeft schone Excel per jaar |
+| Stijl in module-niveau constanten | Één plek voor kleuren/fonts — geen magic values door de code heen |
+
+---
+
 ## Current state (as of April 2026)
 
 ### What works
@@ -159,28 +179,47 @@ When `--year YYYY` is used, the output file is named `boekhouding_YYYY.xlsx` and
 
 ---
 
-## Backlog (planned future features)
+## Hoofddoelen (in volgorde van prioriteit)
 
-### Phase 2 — Company account (ZZP)
-- [ ] Second ABN AMRO account processed separately from personal
-- [ ] Company-specific categories: BTW, Zakelijke kosten, Facturen, etc.
-- [ ] Separate output sheet/file for company vs personal
+Dit is een persoonlijk boekhoudproject voor ZZP + privé.
+Het doel is een volledig geautomatiseerd financieel systeem.
 
-### Phase 3 — Receipt/invoice scanning (OCR)
-- [ ] Upload photo of a receipt or invoice (jpg/png/pdf)
-- [ ] Extract: vendor, amount, date, BTW, payment method using Claude vision
-- [ ] Match scanned receipts against bank transactions automatically
-- [ ] Useful for: ZZP facturen, zakelijke bonnetjes, BTW administratie
+1. **Bankbestanden inlezen** ✅ → `process.py`
+   - ABN AMRO .TAB formaat (privé + zakelijk)
+   - Auto-categorisatie via rules.xlsx
+   - Output: Excel met maandoverzicht + onbekenden
 
-### Phase 4 — Dashboard
-- [ ] Simple web UI or Streamlit dashboard
-- [ ] Monthly spending chart per category
-- [ ] Savings goals tracker (spaarpotjes like old kasboek)
-- [ ] Year-over-year comparison
+2. **Bonnetjes inlezen** → `receipt_scanner.py`
+   - Bron: lokale map of Google Drive
+   - OCR via Claude Vision API
+   - Extractie: datum, bedrag, BTW, leverancier
+   - Match met banktransacties op datum + bedrag
 
-### Phase 5 — Automation
-- [ ] Watch input/ folder and auto-process on new file
-- [ ] Email/notification summary after processing
+3. **Inkomsten/uitgaven overzicht** → al deels in `process.py`
+   - Maandoverzicht per categorie
+   - Grafiek embedded in Excel output
+   - Privé en zakelijk gescheiden
+
+4. **Belastingaangifte** → `tax_report.py`
+   - BTW per kwartaal (0% / 9% / 21%)
+   - Aftrekbare zakelijke kosten
+   - Export klaar voor IB-aangifte invullen
+
+5. **Financieel jaarverslag + prognose** → `annual_report.py`
+   - Volledig overzicht privé + zakelijk
+   - 3-maands prognose op basis van gemiddelden
+   - Spaardoelen tracker
+
+---
+
+## Promptworkflow (notities → Claude Code)
+
+Voor elke nieuwe sessie:
+1. Open VS Code in de `finance/` root
+2. Start Claude Code: `claude`
+3. Plak de taak-prompt uit `README_PROMPTS.md` en pas aan waar nodig
+4. Claude leest CLAUDE.md automatisch als context
+5. Commit na elke werkende feature
 
 ---
 
