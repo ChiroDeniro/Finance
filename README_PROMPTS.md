@@ -5,6 +5,36 @@ Pas de placeholders (`[...]`) aan naar de actuele situatie.
 
 ---
 
+## Backlog beheren
+
+#### Add an idea
+```
+Read ONLY: BACKLOG.md
+Add this to the "Later" section:
+[IDEA — 1-2 lines max]
+Commit: "backlog: [short name] added"
+```
+
+#### Start a backlog item
+```
+Read ONLY: BACKLOG.md, bookkeeping/CLAUDE.md
+Move this item from "Next" to "Now":
+[ITEM]
+Create branch if needed: git checkout -b [feature/name]
+Commit: "backlog: [item] moved to now"
+```
+
+#### Close a completed item
+```
+Read ONLY: BACKLOG.md
+Mark this item as done and move it to a new
+"## Done" section at the bottom with completion date:
+[ITEM]
+Commit: "backlog: [item] done"
+```
+
+---
+
 ## process.py — Bankbestanden verwerken
 
 ### Onbekende transacties categoriseren
