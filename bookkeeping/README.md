@@ -101,6 +101,7 @@ finance/
 ├── CLAUDE.md
 ├── README.md
 ├── README_PROMPTS.md          ← reusable prompt templates
+├── BACKLOG.md                 ← ideas, planned features, work in progress
 └── bookkeeping/
     ├── process.py             ← main entry point
     ├── loader.py              ← TAB reading + validation
