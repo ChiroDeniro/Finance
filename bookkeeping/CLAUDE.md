@@ -179,63 +179,32 @@ Keuzes die niet uit de code zelf blijken — bewaar dit voor toekomstige sessies
 
 ---
 
-## Hoofddoelen (in volgorde van prioriteit)
+## Backlog
 
-Dit is een persoonlijk boekhoudproject voor ZZP + privé.
-Het doel is een volledig geautomatiseerd financieel systeem.
-
-1. **Bankbestanden inlezen** ✅ → `process.py`
-   - ABN AMRO .TAB formaat (privé + zakelijk)
-   - Auto-categorisatie via rules.xlsx
-   - Output: Excel met maandoverzicht + onbekenden
-
-2. **Bonnetjes inlezen** → `receipt_scanner.py`
-   - Bron: lokale map of Google Drive
-   - OCR via Claude Vision API
-   - Extractie: datum, bedrag, BTW, leverancier
-   - Match met banktransacties op datum + bedrag
-
-3. **Inkomsten/uitgaven overzicht** → al deels in `process.py`
-   - Maandoverzicht per categorie
-   - Grafiek embedded in Excel output
-   - Privé en zakelijk gescheiden
-
-4. **Belastingaangifte** → `tax_report.py`
-   - BTW per kwartaal (0% / 9% / 21%)
-   - Aftrekbare zakelijke kosten
-   - Export klaar voor IB-aangifte invullen
-
-5. **Financieel jaarverslag + prognose** → `annual_report.py`
-   - Volledig overzicht privé + zakelijk
-   - 3-maands prognose op basis van gemiddelden
-   - Spaardoelen tracker
+See `BACKLOG.md` in the repo root.
+Do NOT read it unless explicitly asked to.
+Current focus: see "Now" section in BACKLOG.md.
 
 ---
 
-## Promptworkflow (notities → Claude Code)
+## Hoofddoelen
 
-Voor elke nieuwe sessie:
-1. Open VS Code in de `finance/` root
-2. Start Claude Code: `claude`
-3. Plak de taak-prompt uit `README_PROMPTS.md` en pas aan waar nodig
-4. Claude leest CLAUDE.md automatisch als context
-5. Commit na elke werkende feature
+1. Bankbestanden inlezen ✅ → process.py
+2. Bonnetjes inlezen → receipt_scanner.py (planned)
+3. Belastingaangifte → tax_report.py (planned)
+4. Jaarverslag + prognose → annual_report.py (planned)
+5. Dashboard (planned)
+
+---
+
+## Sessie starten
+
+1. Lees dit bestand — vooral "Current state"
+2. Plak een prompt uit `README_PROMPTS.md` en pas aan
+3. Commit na elke werkende feature
 
 ---
 
 ## Reference Files
 
-- `InfoFiles/Jaaroverzichten_kasboekken.xlsx` — old manual kasboek 2023
-  - Sheet "2023 betaalrekening": monthly income/expense breakdown with transaction log
-  - Sheet "sparen 2023": savings goals (Apparaten, Noodfonds, SpaarRing, Kleding, Trips, etc.)
-  - Use this as visual/structural inspiration only — data is from 2023
-
----
-
-## When Starting a New Claude Code Session
-
-1. Read this file (CLAUDE.md) — especially "Current state" above
-2. Read `bookkeeping/process.py`
-3. Check if there are new `.TAB` files in `bookkeeping/input/`
-4. Run `python -X utf8 bookkeeping/process.py --year 2025` to verify current state
-5. Ask what to work on — most likely: rules gap-fill for 2025, or starting on Phase 2 (company account)
+- `InfoFiles/Jaaroverzichten_kasboekken.xlsx` — oud kasboek 2023, structuur/kleur als referentie
