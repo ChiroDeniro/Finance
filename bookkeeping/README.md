@@ -2,6 +2,17 @@
 
 Personal finance automation for ABN AMRO bank accounts. Replaces manual Excel kasboek.
 
+---
+
+## Project
+
+Personal finance automation for Chris (Den Haag).
+Two ABN AMRO accounts — betaalrekening (personal) and spaarrekening. Replaces a manual Excel kasboek that broke down when unknowns weren't tracked and year summaries drifted from reality.
+
+Design principles: local first, one command to run, transparent Excel output with visible formulas, incremental modules built in phases.
+
+---
+
 ## Quick start
 
 ```bash
@@ -87,15 +98,35 @@ python process.py --migrate-rules  # rename old category names to new system
 
 ```
 finance/
+├── CLAUDE.md
+├── README.md
+├── README_PROMPTS.md          ← reusable prompt templates
 └── bookkeeping/
-    ├── process.py           ← main script
-    ├── rules.xlsx           ← categorisation rules (edit to add/fix categories)
-    ├── CLAUDE.md            ← context file for Claude Code sessions
-    ├── input/               ← drop .TAB files here (gitignored)
-    ├── output/              ← Excel output lands here (gitignored)
-    └── InfoFiles/
-        └── Jaaroverzichten_kasboekken.xlsx  ← old manual kasboek (reference)
+    ├── process.py             ← main entry point
+    ├── loader.py              ← TAB reading + validation
+    ├── categoriser.py         ← rules matching
+    ├── excel_output.py        ← Excel writing + styling
+    ├── config.py              ← constants + paths
+    ├── receipt_scanner.py     ← (planned) receipt OCR
+    ├── tax_report.py          ← (planned) tax overview
+    ├── annual_report.py       ← (planned) year report
+    ├── rules.xlsx
+    ├── input/
+    ├── receipts/              ← drop receipts/invoices here
+    └── output/
 ```
+
+---
+
+## Roadmap
+
+| # | Module | Status |
+|---|--------|--------|
+| 1 | process.py — bank file import + categorisation | ✅ done |
+| 2 | receipt_scanner.py — receipt OCR + matching | planned |
+| 3 | tax_report.py — BTW + IB aangifte export | planned |
+| 4 | annual_report.py — year report + forecast | planned |
+| 5 | Dashboard — visualisation + net worth | planned |
 
 ---
 
