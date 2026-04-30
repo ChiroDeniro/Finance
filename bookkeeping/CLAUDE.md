@@ -162,6 +162,14 @@ Keuzes die niet uit de code zelf blijken — bewaar dit voor toekomstige sessies
 | File size limit | Any file Claude Code reads regularly: max ~150 lines. Over 300 lines and touched every session → split it. |
 | README vs CLAUDE.md | README = for humans who've never seen the project. CLAUDE.md = for Claude Code starting fresh. Never mix audiences. |
 
+**Dagelijks Overig (vangnet)**
+Alle transacties zonder matchende rule landen automatisch in
+"Dagelijks Overig" onder DAGELIJKSE UITGAVEN. Dit is bewust —
+niets mag buiten de totalen vallen. Maandelijks worden grote
+bedragen handmatig gecategoriseerd door een regel toe te voegen
+aan rules.xlsx en process.py opnieuw te draaien. Dagelijks Overig
+blijft altijd zichtbaar in het maandoverzicht, ook als het nul is.
+
 ---
 
 ## Current state (as of April 2026)
