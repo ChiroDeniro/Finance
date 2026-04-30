@@ -1,7 +1,6 @@
 # Backlog — Finance Project
 
 ## Now — in progress
-- [ ] Refactor process.py into modules — sessions freeze on 1000-line file. (branch: refactor/split-process-modules)
 - [ ] 2025 coverage: 74% (960/1298 tx). 338 onbekend blijven. Open Onbekend 2025 sheet → voeg keywords toe aan rules.xlsx.
 
 ## Next — ready to pick up
