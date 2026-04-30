@@ -91,23 +91,27 @@ Inspired by the old kasboek in InfoFiles/. Two blocks: INKOMEN and UITGAVEN.
 - Inkomsten Overig
 
 ### VASTE LASTEN
-- Huur & Wonen
+- Huur
+- Inclusief Huur
 - Zorgverzekering
 - Telefoon & Internet
 - Bankkosten
 - Abonnementen
+- Sport & Fitness
+- Onderhoud
 
 ### DAGELIJKSE UITGAVEN
 - Boodschappen
 - Eten & Drinken
+- Uitgaan
 - OV & Reizen
-- Sport & Fitness
-- Online Winkelen
 - Kleding
+- Kapper
 - Gezondheid
-- Tabak
+- WbW
 - Cultuur & Entertainment
 - Studie
+- Dagelijks Overig
 
 ### OVERIG
 - Sparen

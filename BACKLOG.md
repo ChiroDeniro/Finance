@@ -1,15 +1,14 @@
 # Backlog — Finance Project
 
 ## Now — in progress
-- [ ] Refactor process.py into modules — sessions freeze on 1000-line file. See refactor notes in CLAUDE.md. (branch: refactor/split-process-modules)
-- [ ] Fix unknowns in 2025 monthly overview + controle sheet
+- [ ] Refactor process.py into modules — sessions freeze on 1000-line file. (branch: refactor/split-process-modules)
+- [ ] 2025 coverage: 74% (960/1298 tx). 338 onbekend blijven. Open Onbekend 2025 sheet → voeg keywords toe aan rules.xlsx.
 
 ## Next — ready to pick up
 - [ ] Auto-detect account numbers from TAB into config.json
 - [ ] New 2026 category structure (ODS, BS, PV, wbw, Huur, Inclusief etc.)
 - [ ] Saldo betaalrekening auto-read from TAB (balance_before first tx)
 - [ ] Saldo spaarrekening auto-read from TAB with fallback if no mutations
-
 - [ ] Evaluate SQLite as storage layer underneath Excel output
       Current: Python writes directly to Excel (good for humans,
       bad for querying). Alternative: write to SQLite first,
