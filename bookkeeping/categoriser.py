@@ -3,7 +3,7 @@ import pandas as pd
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font
 
-from config import RULES_FILE, OWN_ACCOUNTS, C_HEADER, WHITE, _fill
+from config import RULES_FILE, OWN_ACCOUNTS, C_HEADER, WHITE, _fill, get_iban_rules
 
 
 def load_rules():
@@ -31,8 +31,24 @@ def categorise(merchant, rules):
     return "Dagelijks Overig"
 
 
+def _categorise_by_desc(description, iban_rules):
+    dl = str(description).lower()
+    for kw, cat in iban_rules:
+        if kw.lower() in dl:
+            return cat
+    return None
+
+
 def apply_categories(df, rules):
-    df["category"] = df["merchant"].apply(lambda m: categorise(m, rules))
+    iban_rules = get_iban_rules()
+
+    def _cat(row):
+        cat = _categorise_by_desc(row["description"], iban_rules)
+        return cat if cat else categorise(row["merchant"], rules)
+
+    df["category"] = df.apply(_cat, axis=1)
+    # ZZP Opname is only valid for incoming transactions
+    df.loc[(df["category"] == "ZZP Opname") & (df["amount"] < 0), "category"] = "Dagelijks Overig"
     print(f"Gecategoriseerd: {len(df)} transacties  (fallback → Dagelijks Overig)")
     return df
 

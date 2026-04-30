@@ -12,8 +12,9 @@ from config import (
     C_VL_HDR,  C_VL_SUB,  C_VL_ROW,
     C_DAG_HDR, C_DAG_SUB, C_DAG_ROW,
     C_OVR_HDR, C_OVR_SUB, C_OVR_ROW,
+    C_IO_HDR, C_IO_ROW,
     C_SAM_HDR, C_NETTO_POS, C_NETTO_NEG, C_KOSTEN_ROW,
-    C_HEADER, C_ALT_ROW,
+    C_HEADER, C_ALT_ROW, KOSTEN_EXCLUDE,
     format_period, _fill,
 )
 
@@ -75,7 +76,7 @@ def write_overview_sheet(ws, df, group_by="month"):
     last_col   = gem_col or tot_col
     euro_fmt   = '€ #,##0;-€ #,##0'
 
-    EXCLUDE_FROM_OVERVIEW = {"Interne Overboeking"}
+    EXCLUDE_FROM_OVERVIEW = set()
     pivot = df[~df["category"].isin(EXCLUDE_FROM_OVERVIEW)].pivot_table(
         index="category", columns=pivot_col,
         values="amount", aggfunc="sum", fill_value=0,
@@ -227,6 +228,8 @@ def write_overview_sheet(ws, df, group_by="month"):
     _subtotal_row("Totaal Overig", OVERIG_CATS, C_OVR_SUB)
     _blank()
 
+    _section_hdr("INTERNE OVERBOEKINGEN", C_IO_HDR)
+    _data_row("Interne Overboeking", C_IO_ROW)
     _blank()
 
     _section_hdr("SAMENVATTING", C_SAM_HDR)
@@ -235,7 +238,7 @@ def write_overview_sheet(ws, df, group_by="month"):
     _samenvatting_row("Totaal Dagelijks",    DAGELIJKS_CATS,    C_DAG_ROW, C_DAG_SUB)
     _samenvatting_row("Totaal Overig",       OVERIG_CATS,       C_OVR_ROW, C_OVR_SUB)
 
-    EXPENSE_CATS = VASTE_LASTEN_CATS + DAGELIJKS_CATS + OVERIG_CATS
+    EXPENSE_CATS = VASTE_LASTEN_CATS + DAGELIJKS_CATS + [c for c in OVERIG_CATS if c not in KOSTEN_EXCLUDE]
     r    = row_num[0]
     fill = _fill(C_KOSTEN_ROW)
     font = Font(bold=True, name="Arial", size=9)

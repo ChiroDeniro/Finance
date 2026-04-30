@@ -4,7 +4,7 @@ import sys
 import glob
 import pandas as pd
 
-from config import INPUT_DIR
+from config import INPUT_DIR, load_config, save_config
 
 
 def find_input_files():
@@ -81,7 +81,22 @@ def load_transactions(files):
 
     print(f"Geladen: {len(df)} transacties  "
           f"({df['date'].min().date()} - {df['date'].max().date()})")
+
+    _update_config_accounts(df["account"].unique().tolist())
     return df
+
+
+def _update_config_accounts(account_numbers):
+    cfg      = load_config()
+    accounts = cfg.get("accounts", {})
+    new_accs = [a for a in account_numbers if a not in accounts]
+    if new_accs:
+        for acct in new_accs:
+            accounts[acct] = {"label": "", "iban": ""}
+        cfg["accounts"] = accounts
+        save_config(cfg)
+        for acct in new_accs:
+            print(f"  Nieuw account opgeslagen: {acct} — vul label/IBAN in config.json in")
 
 
 def extract_merchant(desc):

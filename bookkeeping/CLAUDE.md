@@ -88,6 +88,7 @@ Inspired by the old kasboek in InfoFiles/. Two blocks: INKOMEN and UITGAVEN.
 - DUO / Studiefinanciering
 - Zorgtoeslag
 - Familie & Giften
+- ZZP Opname
 - Inkomsten Overig
 
 ### VASTE LASTEN
@@ -115,6 +116,7 @@ Inspired by the old kasboek in InfoFiles/. Two blocks: INKOMEN and UITGAVEN.
 
 ### OVERIG
 - Sparen
+- Beleggen
 
 **Important:** Always use these exact category names. rules.xlsx and process.py must stay in sync.
 

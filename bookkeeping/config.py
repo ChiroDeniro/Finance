@@ -1,10 +1,12 @@
 import os
+import json
 from openpyxl.styles import PatternFill
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR  = os.path.join(BASE_DIR, "input")
-RULES_FILE = os.path.join(BASE_DIR, "rules.xlsx")
+BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+INPUT_DIR   = os.path.join(BASE_DIR, "input")
+RULES_FILE  = os.path.join(BASE_DIR, "rules.xlsx")
+CONFIG_JSON = os.path.join(BASE_DIR, "config.json")
 
 _DRIVE_DIR = r"C:\Users\chris\Documents\Finance\Kasboek"
 OUTPUT_DIR = _DRIVE_DIR if os.path.isdir(_DRIVE_DIR) else os.path.join(BASE_DIR, "output")
@@ -18,6 +20,7 @@ INCOME_CATS = [
     "DUO / Studiefinanciering",
     "Zorgtoeslag",
     "Familie & Giften",
+    "ZZP Opname",
     "Inkomsten Overig",
 ]
 VASTE_LASTEN_CATS = [
@@ -43,7 +46,10 @@ DAGELIJKS_CATS = [
     "Studie",
     "Dagelijks Overig",
 ]
-OVERIG_CATS = ["Sparen"]
+OVERIG_CATS = ["Sparen", "Beleggen"]
+
+# Categories excluded from Totaal Kosten in SAMENVATTING
+KOSTEN_EXCLUDE = frozenset({"Beleggen"})
 
 ALL_KNOWN_CATS = INCOME_CATS + VASTE_LASTEN_CATS + DAGELIJKS_CATS + OVERIG_CATS
 
@@ -68,6 +74,9 @@ C_OVR_HDR  = "595959"
 C_OVR_SUB  = "808080"
 C_OVR_ROW  = "F2F2F2"
 
+C_IO_HDR   = "4A4A4A"
+C_IO_ROW   = "DEDEDE"
+
 C_SAM_HDR   = "1F4E79"
 C_NETTO_POS = "375623"
 C_NETTO_NEG = "C00000"
@@ -81,6 +90,22 @@ MAANDEN_NL = {
     1: "Jan", 2: "Feb", 3: "Mrt", 4: "Apr", 5: "Mei",  6: "Jun",
     7: "Jul", 8: "Aug", 9: "Sep", 10: "Okt", 11: "Nov", 12: "Dec",
 }
+
+
+def load_config():
+    if os.path.exists(CONFIG_JSON):
+        with open(CONFIG_JSON, encoding="utf-8") as f:
+            return json.load(f)
+    return {"accounts": {}, "iban_rules": {}}
+
+
+def save_config(cfg):
+    with open(CONFIG_JSON, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+
+def get_iban_rules():
+    return list(load_config().get("iban_rules", {}).items())
 
 
 def format_period(period_str, group_by):

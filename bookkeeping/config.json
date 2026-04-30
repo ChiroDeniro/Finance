@@ -1,0 +1,15 @@
+{
+  "accounts": {
+    "536542171": {
+      "label": "",
+      "iban": ""
+    },
+    "844835730": {
+      "label": "",
+      "iban": ""
+    }
+  },
+  "iban_rules": {
+    "knabnl": "ZZP Opname"
+  }
+}
