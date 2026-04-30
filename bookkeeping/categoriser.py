@@ -28,17 +28,12 @@ def categorise(merchant, rules):
     for kw, cat in rules:
         if kw in ml:
             return cat
-    return "Onbekend"
+    return "Dagelijks Overig"
 
 
 def apply_categories(df, rules):
     df["category"] = df["merchant"].apply(lambda m: categorise(m, rules))
-    n_unk   = (df["category"] == "Onbekend").sum()
-    n_total = len(df)
-    pct     = 100 * (n_total - n_unk) / n_total if n_total else 0
-    print(f"Gecategoriseerd: {n_total - n_unk}/{n_total}  ({pct:.0f}%)")
-    if n_unk:
-        print(f"  {n_unk} transacties zonder categorie - zie het 'Onbekend' tabblad")
+    print(f"Gecategoriseerd: {len(df)} transacties  (fallback → Dagelijks Overig)")
     return df
 
 
@@ -69,14 +64,14 @@ CATEGORY_MIGRATION = {
     "kamerhuur":                 "Huur",
     "huur & wonen":              "Huur",
     "vaste lasten":              "Abonnementen",
-    "belastingen":               "Diversen",
+    "belastingen":               "Dagelijks Overig",
     "sport":                     "Sport & Fitness",
     "ov & reizen":               "OV & Reizen",
     "gezondheid":                "Gezondheid",
     "boodschappen":              "Boodschappen",
     "eten & drinken":            "Eten & Drinken",
     "bankkosten":                "Bankkosten",
-    "diversen":                  "Diversen",
+    "diversen":                  "Dagelijks Overig",
     "sparen":                    "Sparen",
     "online winkelen":           "Dagelijks Overig",
     "tabak":                     "Eten & Drinken",
@@ -89,7 +84,7 @@ KEYWORD_OVERRIDES = {
     "bol.com":           "Dagelijks Overig",
     "media markt":       "Dagelijks Overig",
     "laurenskerk":       "Cultuur & Entertainment",
-    "belastingdienst":   "Diversen",
+    "belastingdienst":   "Dagelijks Overig",
     "sportcity":         "Sport & Fitness",
     "david lloyd":       "Sport & Fitness",
     "youfone":           "Telefoon & Internet",
@@ -153,8 +148,8 @@ def create_starter_rules():
         ("laurenskerk",             "Cultuur & Entertainment"),
         # ── OVERIG ───────────────────────────────────────────────────────────
         ("sparen",                  "Sparen"),
-        ("belastingdienst",         "Diversen"),
-        ("primera",                 "Diversen"),
+        ("belastingdienst",         "Dagelijks Overig"),
+        ("primera",                 "Dagelijks Overig"),
     ]
 
     wb = Workbook()

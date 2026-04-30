@@ -13,7 +13,7 @@ from config import (
     C_DAG_HDR, C_DAG_SUB, C_DAG_ROW,
     C_OVR_HDR, C_OVR_SUB, C_OVR_ROW,
     C_SAM_HDR, C_NETTO_POS, C_NETTO_NEG, C_KOSTEN_ROW,
-    C_HEADER, C_ALT_ROW, C_UNKNOWN,
+    C_HEADER, C_ALT_ROW,
     format_period, _fill,
 )
 
@@ -31,17 +31,14 @@ def write_transactions_sheet(ws, df):
         cell.alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[1].height = 20
 
-    unk_fill = _fill(C_UNKNOWN)
     inc_fill = _fill(C_INC_ROW)
     alt_fill = _fill(C_ALT_ROW)
     euro_fmt = '€ #,##0.00;-€ #,##0.00'
 
     for r, (_, row) in enumerate(df.iterrows(), 2):
-        is_unk    = row["category"] == "Onbekend"
         is_income = row["amount"] > 0
-        fill = (unk_fill if is_unk
-                else (inc_fill if is_income
-                      else (alt_fill if r % 2 == 0 else None)))
+        fill = (inc_fill if is_income
+                else (alt_fill if r % 2 == 0 else None))
         data = [
             row["date"].date(), row["account"], row["description"][:80],
             row["merchant"], row["amount"], row["category"], row["month"],
@@ -78,7 +75,7 @@ def write_overview_sheet(ws, df, group_by="month"):
     last_col   = gem_col or tot_col
     euro_fmt   = '€ #,##0;-€ #,##0'
 
-    EXCLUDE_FROM_OVERVIEW = {"Onbekend", "Interne Overboeking"}
+    EXCLUDE_FROM_OVERVIEW = {"Interne Overboeking"}
     pivot = df[~df["category"].isin(EXCLUDE_FROM_OVERVIEW)].pivot_table(
         index="category", columns=pivot_col,
         values="amount", aggfunc="sum", fill_value=0,
@@ -178,30 +175,6 @@ def write_overview_sheet(ws, df, group_by="month"):
         ws.row_dimensions[row_num[0]].height = 5
         row_num[0] += 1
 
-    def _unk_row(label, series):
-        r = row_num[0]
-        ws.cell(row=r, column=1, value=label)
-        ws.cell(row=r, column=1).font = Font(name="Arial", size=9, italic=True, color="888888")
-        total = 0.0
-        for c, p in enumerate(periods, 2):
-            v    = float(series.get(p, 0.0))
-            cell = ws.cell(row=r, column=c, value=round(v) if v else 0)
-            cell.number_format = euro_fmt
-            cell.font = Font(name="Arial", size=9, italic=True, color="888888")
-            cell.alignment = Alignment(horizontal="right")
-            total += v
-        tc = ws.cell(row=r, column=tot_col, value=round(total))
-        tc.number_format = euro_fmt
-        tc.font = Font(bold=True, name="Arial", size=9, italic=True, color="888888")
-        tc.alignment = Alignment(horizontal="right")
-        if gem_col:
-            avg = total / n if n else 0
-            gc = ws.cell(row=r, column=gem_col, value=round(avg))
-            gc.number_format = euro_fmt
-            gc.font = Font(italic=True, name="Arial", size=9, color="888888")
-            gc.alignment = Alignment(horizontal="right")
-        row_num[0] += 1
-
     def _samenvatting_row(label, cats, row_color, sub_color):
         r    = row_num[0]
         fill = _fill(sub_color)
@@ -254,14 +227,6 @@ def write_overview_sheet(ws, df, group_by="month"):
     _subtotal_row("Totaal Overig", OVERIG_CATS, C_OVR_SUB)
     _blank()
 
-    unk_df  = df[df["category"] == "Onbekend"]
-    unk_inc = unk_df[unk_df["amount"] > 0].groupby(pivot_col)["amount"].sum()
-    unk_uit = unk_df[unk_df["amount"] < 0].groupby(pivot_col)["amount"].sum()
-    if len(unk_df) > 0:
-        _section_hdr("ONBEKEND", C_OVR_HDR)
-        _unk_row("Onbekend Inkomen", unk_inc)
-        _unk_row("Onbekend Uitgaven", unk_uit)
-        _blank()
     _blank()
 
     _section_hdr("SAMENVATTING", C_SAM_HDR)
@@ -336,7 +301,7 @@ def write_jaar_samenvatting_sheet(ws, df, year_label=""):
     euro_fmt = '€ #,##0;-€ #,##0'
     pct_fmt  = '0.0"%"'
 
-    EXCLUDE = {"Onbekend", "Interne Overboeking"}
+    EXCLUDE = {"Interne Overboeking"}
     df_real = df[~df["category"].isin(EXCLUDE)]
 
     cat_totals = df_real.groupby("category")["amount"].sum()
@@ -479,65 +444,6 @@ def write_jaar_samenvatting_sheet(ws, df, year_label=""):
     ws.column_dimensions["C"].width = 16
 
 
-def write_unknowns_sheet(ws, df):
-    ws.title = "Onbekend"
-    unknowns = df[df["category"] == "Onbekend"].copy()
-
-    if unknowns.empty:
-        ws.cell(row=1, column=1,
-                value="Alles gecategoriseerd - geen onbekende transacties!")
-        ws.cell(row=1, column=1).font = Font(name="Arial", size=10, bold=True,
-                                              color=C_INC_HDR)
-        return
-
-    tip = ("Voeg een keyword toe aan rules.xlsx en herrun process.py "
-           "om deze merchants automatisch te categoriseren.")
-    ws.cell(row=1, column=1, value=tip)
-    ws.cell(row=1, column=1).font = Font(name="Arial", size=9, italic=True,
-                                          color="595959")
-    ws.merge_cells("A1:E1")
-    ws.row_dimensions[1].height = 14
-
-    headers = ["Merchant", "Aantal", "Totaal (EUR)",
-               "Voorbeeld omschrijving", "Jouw categorie (vul in)"]
-    for c, h in enumerate(headers, 1):
-        cell = ws.cell(row=2, column=c, value=h)
-        cell.fill = _fill("C55A11")
-        cell.font = Font(bold=True, color=WHITE, name="Arial", size=10)
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[2].height = 20
-
-    grouped = (
-        unknowns.groupby("merchant", sort=False)
-        .agg(aantal=("amount", "count"),
-             totaal=("amount", "sum"),
-             voorbeeld=("description", "first"))
-        .reset_index()
-        .sort_values("totaal", key=lambda x: x.abs(), ascending=False)
-    )
-
-    unk_fill = _fill(C_UNKNOWN)
-    euro_fmt = '€ #,##0.00;-€ #,##0.00'
-
-    for r, (_, row) in enumerate(grouped.iterrows(), 3):
-        vals = [row["merchant"], int(row["aantal"]), row["totaal"],
-                str(row["voorbeeld"])[:80], ""]
-        for c, v in enumerate(vals, 1):
-            cell = ws.cell(row=r, column=c, value=v)
-            cell.fill = unk_fill
-            cell.font = Font(name="Arial", size=9)
-            if c == 3:
-                cell.number_format = euro_fmt
-            if c == 5:
-                cell.font = Font(name="Arial", size=9, italic=True,
-                                  color="595959")
-
-    for c, w in enumerate([28, 8, 14, 55, 28], 1):
-        ws.column_dimensions[get_column_letter(c)].width = w
-    last_data_row = 2 + len(grouped)
-    ws.auto_filter.ref = f"A2:{get_column_letter(len(headers))}{last_data_row}"
-
-
 def write_controle_sheet(ws, df, year_label=""):
     ws.title = f"Controle{' ' + year_label if year_label else ''}"
     ws.freeze_panes = "B2"
@@ -551,8 +457,7 @@ def write_controle_sheet(ws, df, year_label=""):
         return float(frame[frame["month"] == period]["amount"].sum())
 
     headers = [
-        "Maand", "Inkomen (cat)", "Uitgaven (cat)",
-        "Onbekend Inc", "Onbekend Uit", "Netto Alle", "Interne OB",
+        "Maand", "Inkomen (cat)", "Uitgaven (cat)", "Netto Alle", "Interne OB",
     ]
 
     r = 1
@@ -570,12 +475,10 @@ def write_controle_sheet(ws, df, year_label=""):
         r += 1
         inc_cat = _s(df_real[df_real["category"].isin(INCOME_CATS)], period)
         uit_cat = _s(df_real[df_real["category"].isin(EXPENSE_CATS)], period)
-        unk_inc = _s(df_real[(df_real["category"] == "Onbekend") & (df_real["amount"] > 0)], period)
-        unk_uit = _s(df_real[(df_real["category"] == "Onbekend") & (df_real["amount"] < 0)], period)
         netto   = _s(df_real, period)
         interne = _s(df_int, period)
 
-        vals = [inc_cat, uit_cat, unk_inc, unk_uit, netto, interne]
+        vals = [inc_cat, uit_cat, netto, interne]
         ws.cell(row=r, column=1, value=format_period(period, "month")).font = Font(name="Arial", size=9)
         for c, v in enumerate(vals, 2):
             cell = ws.cell(row=r, column=c, value=round(v))
@@ -612,10 +515,6 @@ def save_output(df, year_label=""):
 
     ws_js = wb.create_sheet()
     write_jaar_samenvatting_sheet(ws_js, df, year_label=year_label)
-
-    ws_unk = wb.create_sheet()
-    write_unknowns_sheet(ws_unk, df)
-    ws_unk.title = f"Onbekend{suffix}"
 
     ws_ctrl = wb.create_sheet()
     write_controle_sheet(ws_ctrl, df, year_label=year_label)

@@ -43,7 +43,7 @@ DAGELIJKS_CATS = [
     "Studie",
     "Dagelijks Overig",
 ]
-OVERIG_CATS = ["Sparen", "Diversen"]
+OVERIG_CATS = ["Sparen"]
 
 ALL_KNOWN_CATS = INCOME_CATS + VASTE_LASTEN_CATS + DAGELIJKS_CATS + OVERIG_CATS
 
@@ -75,7 +75,6 @@ C_KOSTEN_ROW = "FFD6E0"
 
 C_HEADER   = "1F4E79"
 C_ALT_ROW  = "EEF3FA"
-C_UNKNOWN  = "FFF2CC"
 
 # ── Dutch month labels ────────────────────────────────────────────────────────
 MAANDEN_NL = {

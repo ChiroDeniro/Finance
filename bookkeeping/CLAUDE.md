@@ -115,7 +115,6 @@ Inspired by the old kasboek in InfoFiles/. Two blocks: INKOMEN and UITGAVEN.
 
 ### OVERIG
 - Sparen
-- Diversen
 
 **Important:** Always use these exact category names. rules.xlsx and process.py must stay in sync.
 

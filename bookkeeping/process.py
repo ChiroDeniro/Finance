@@ -8,7 +8,7 @@ Output: /output/boekhouding_YYYYMMDD_HHMM.xlsx  with:
   - Sheet 1: Transacties       — all transactions, sorted by date
   - Sheet 2: Maand Overzicht   — kasboek-style blocks per month
   - Sheet 3: Jaar Overzicht    — same structure per year
-  - Sheet 4: Onbekend          — unknown merchants grouped for easy triage
+  - Sheet 4: Controle          — per-month reconciliation check
 """
 
 import os
