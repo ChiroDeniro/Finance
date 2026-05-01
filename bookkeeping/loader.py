@@ -11,18 +11,18 @@ def find_input_files():
     patterns = ["*.TAB", "*.tab", "*.txt", "*.TXT"]
     seen, files = set(), []
     for p in patterns:
-        for f in glob.glob(os.path.join(INPUT_DIR, p)):
+        for f in glob.glob(os.path.join(INPUT_DIR, "**", p), recursive=True):
             key = os.path.normcase(os.path.abspath(f))
             if key not in seen:
                 seen.add(key)
                 files.append(f)
     if not files:
-        print(f"Geen invoerbestanden gevonden in {INPUT_DIR}/")
+        print(f"Geen invoerbestanden gevonden in {INPUT_DIR}/ (of submappen)")
         print("Download je ABN AMRO afschrift als 'Excel (TXT)' en zet het daar neer.")
         sys.exit(1)
     print(f"Gevonden: {len(files)} invoerbestand(en)")
     for f in files:
-        print(f"  {os.path.basename(f)}")
+        print(f"  {os.path.relpath(f, INPUT_DIR)}")
     return files
 
 
