@@ -13,6 +13,7 @@ Output: /output/boekhouding_YYYYMMDD_HHMM.xlsx  with:
 
 import os
 import sys
+import time
 
 from config import RULES_FILE, INCOME_CATS, VASTE_LASTEN_CATS, DAGELIJKS_CATS, OVERIG_CATS, MAANDEN_NL, dutch_euros
 from loader import find_input_files, load_transactions
@@ -44,6 +45,7 @@ def main():
     if year_filter:
         print(f"Jaar filter: {year_filter}")
 
+    t0    = time.time()
     files = find_input_files()
     df    = load_transactions(files)
 
@@ -52,11 +54,31 @@ def main():
         if df.empty:
             sys.exit(f"Geen transacties gevonden voor jaar {year_filter}")
         print(f"Gefilterd op {year_filter}: {len(df)} transacties")
+    print(f"Stap 1 (inlezen TAB):    {time.time() - t0:.2f}s")
 
+    t0    = time.time()
     rules = load_rules()
     df    = apply_categories(df, rules)
     df    = detect_internal_transfers(df)
-    out   = save_output(df, year_label=year_filter or "")
+    print(f"Stap 2 (categoriseren):  {time.time() - t0:.2f}s")
+
+    # ── Verificatie totalen ───────────────────────────────────────────────────
+    df_real = df[df["category"] != "Interne Overboeking"]
+    print("\n" + "=" * 50)
+    print("VERIFICATIE TOTALEN")
+    print("=" * 50)
+    print(f"1. Totaal transacties (incl. interne ob):  {len(df)}")
+    print(f"2. Som ALLE bedragen (incl. interne ob):   {df['amount'].sum():.2f}")
+    print(f"3. Som CREDIT (positief, excl. int. ob):   {df_real[df_real['amount'] > 0]['amount'].sum():.2f}")
+    print(f"4. Som DEBET  (negatief, excl. int. ob):   {df_real[df_real['amount'] < 0]['amount'].sum():.2f}")
+    print(f"5. Transacties 'Dagelijks Overig':         {(df['category'] == 'Dagelijks Overig').sum()}")
+    print(f"6. Transacties zonder categorie:           {df['category'].isna().sum() + (df['category'] == '').sum()}")
+    print("=" * 50 + "\n")
+    # ─────────────────────────────────────────────────────────────────────────
+
+    t0  = time.time()
+    out = save_output(df, year_label=year_filter or "")
+    print(f"Stap 3 (Excel output):   {time.time() - t0:.2f}s")
 
     # ── Terminal summary ──────────────────────────────────────────────────────
     df_real = df[df["category"] != "Interne Overboeking"]

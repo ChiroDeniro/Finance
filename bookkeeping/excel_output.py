@@ -1,9 +1,11 @@
 import os
 from datetime import datetime
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, PatternFill
+from openpyxl.styles import Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from openpyxl.formatting.rule import CellIsRule
+
+KLEUR_POSITIEF = "C6EFCE"
+KLEUR_NEGATIEF = "FCE4D6"
 
 from config import (
     OUTPUT_DIR,
@@ -13,8 +15,7 @@ from config import (
     C_VL_HDR,  C_VL_SUB,
     C_DAG_HDR, C_DAG_SUB,
     C_OVR_HDR, C_OVR_SUB,
-    C_IO_HDR,
-    C_SAM_HDR, C_NETTO_POS, C_NETTO_NEG, C_KOSTEN_ROW,
+    C_SAM_HDR, C_NETTO_POS, C_NETTO_NEG,
     C_HEADER, C_ALT_ROW, KOSTEN_EXCLUDE,
     format_period, _fill,
 )
@@ -59,23 +60,36 @@ def write_transactions_sheet(ws, df):
     ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
 
 
-def write_overview_sheet(ws, df, group_by="month", tx_sheet_name="Transacties"):
-    # Transacties columns: A=Datum, B=Rekening, C=Omschrijving, D=Merchant,
-    #                       E=Bedrag, F=Categorie, G=Maand
+def write_overview_sheet(ws, df, group_by="month", tx_sheet_name="Transacties", year_label=""):
     if group_by == "month":
-        ws.title  = "Maand Overzicht"
-        periods   = sorted(df["month"].unique())
+        ws.title = "Maand Overzicht"
+        if year_label:
+            periods = [f"{year_label}-{m:02d}" for m in range(1, 13)]
+        else:
+            periods = sorted(df["month"].unique())
     else:
         ws.title  = "Jaar Overzicht"
         periods   = sorted(df["year"].unique())
 
     ws.freeze_panes = "B2"
 
+    now = datetime.now()
+
+    if group_by == "month":
+        def _is_future(p):
+            yr, mo = int(p[:4]), int(p[5:])
+            return (yr > now.year) or (yr == now.year and mo > now.month)
+        past_count = sum(1 for p in periods if not _is_future(p))
+    else:
+        past_count = len(periods)
+
     n        = len(periods)
     tot_col  = n + 2
     gem_col  = n + 3 if group_by == "month" else None
     last_col = gem_col or tot_col
-    euro_fmt = '€ #,##0;-€ #,##0'
+    euro_fmt = '€ #,##0;-€ #,##0;""'
+
+    thin_bottom = Border(bottom=Side(style="thin"))
 
     tx = f"'{tx_sheet_name}'" if ' ' in tx_sheet_name else tx_sheet_name
 
@@ -103,30 +117,26 @@ def write_overview_sheet(ws, df, group_by="month", tx_sheet_name="Transacties"):
     def _header_row():
         r = row_num[0]
         ws.cell(row=r, column=1, value="Categorie")
-        ws.cell(row=r, column=1).fill = _fill(C_HEADER)
-        ws.cell(row=r, column=1).font = Font(bold=True, color=WHITE, name="Arial", size=10)
+        ws.cell(row=r, column=1).font = Font(bold=True, name="Arial", size=10)
         for c, p in enumerate(periods, 2):
             cell = ws.cell(row=r, column=c, value=format_period(p, group_by))
-            cell.fill = _fill(C_HEADER)
-            cell.font = Font(bold=True, color=WHITE, name="Arial", size=10)
+            cell.font = Font(bold=True, name="Arial", size=10)
             cell.alignment = Alignment(horizontal="center")
         ws.cell(row=r, column=tot_col, value="Totaal")
-        ws.cell(row=r, column=tot_col).fill = _fill(C_HEADER)
-        ws.cell(row=r, column=tot_col).font = Font(bold=True, color=WHITE, name="Arial", size=10)
+        ws.cell(row=r, column=tot_col).font = Font(bold=True, name="Arial", size=10)
         ws.cell(row=r, column=tot_col).alignment = Alignment(horizontal="center")
         if gem_col:
             ws.cell(row=r, column=gem_col, value="Gemiddeld")
-            ws.cell(row=r, column=gem_col).fill = _fill(C_HEADER)
-            ws.cell(row=r, column=gem_col).font = Font(bold=True, color=WHITE, name="Arial", size=10)
+            ws.cell(row=r, column=gem_col).font = Font(bold=True, name="Arial", size=10)
             ws.cell(row=r, column=gem_col).alignment = Alignment(horizontal="center")
         ws.row_dimensions[r].height = 20
         row_num[0] += 1
 
-    def _section_hdr(label, color):
+    def _section_hdr(label):
         r = row_num[0]
         for c in range(1, last_col + 1):
-            ws.cell(row=r, column=c).fill = _fill(color)
-            ws.cell(row=r, column=c).font = Font(bold=True, color=WHITE, name="Arial", size=9)
+            ws.cell(row=r, column=c).font = Font(bold=True, name="Arial", size=9)
+            ws.cell(row=r, column=c).border = thin_bottom
         ws.cell(row=r, column=1).value = label
         ws.row_dimensions[r].height = 16
         row_num[0] += 1
@@ -148,8 +158,9 @@ def write_overview_sheet(ws, df, group_by="month", tx_sheet_name="Transacties"):
         tc.font = Font(bold=True, name="Arial", size=9)
         tc.alignment = Alignment(horizontal="right")
         if gem_col:
+            denom = past_count if past_count > 0 else 1
             gc = ws.cell(row=r, column=gem_col,
-                         value=f"={get_column_letter(tot_col)}{r}/{n}")
+                         value=f"={get_column_letter(tot_col)}{r}/{denom}")
             gc.number_format = euro_fmt
             gc.font = Font(italic=True, name="Arial", size=9)
             gc.alignment = Alignment(horizontal="right")
@@ -159,30 +170,36 @@ def write_overview_sheet(ws, df, group_by="month", tx_sheet_name="Transacties"):
         r = row_num[0]
         if sec_key:
             subtotal_row[sec_key] = r
-        fill = _fill(color)
-        font = Font(bold=True, color=WHITE, name="Arial", size=9)
-        ws.cell(row=r, column=1, value=label).fill = fill
-        ws.cell(row=r, column=1).font = font
+        fill = _fill(color) if color else None
+        font = Font(bold=True, name="Arial", size=9)
+        lbl = ws.cell(row=r, column=1, value=label)
+        lbl.font = font
+        if fill:
+            lbl.fill = fill
         for ci in range(2, n + 2):
             cl = get_column_letter(ci)
             parts = [f"{cl}{row_for_cat[c]}" for c in cats if c in row_for_cat]
             cell = ws.cell(row=r, column=ci,
                            value=f"=SUM({','.join(parts)})" if parts else "=0")
             cell.number_format = euro_fmt
-            cell.fill = fill
             cell.font = font
+            if fill:
+                cell.fill = fill
         fc = get_column_letter(2)
         lc = get_column_letter(n + 1)
         tc = ws.cell(row=r, column=tot_col, value=f"=SUM({fc}{r}:{lc}{r})")
         tc.number_format = euro_fmt
-        tc.fill = fill
         tc.font = font
+        if fill:
+            tc.fill = fill
         if gem_col:
+            denom = past_count if past_count > 0 else 1
             gc = ws.cell(row=r, column=gem_col,
-                         value=f"={get_column_letter(tot_col)}{r}/{n}")
+                         value=f"={get_column_letter(tot_col)}{r}/{denom}")
             gc.number_format = euro_fmt
-            gc.fill = fill
             gc.font = font
+            if fill:
+                gc.fill = fill
         ws.row_dimensions[r].height = 15
         row_num[0] += 1
 
@@ -190,125 +207,118 @@ def write_overview_sheet(ws, df, group_by="month", tx_sheet_name="Transacties"):
         ws.row_dimensions[row_num[0]].height = 5
         row_num[0] += 1
 
-    def _samenvatting_row(label, sec_key, sub_color):
+    def _samenvatting_row(label, sec_key, color):
         r = row_num[0]
         sam_row_map[sec_key] = r
-        fill = _fill(sub_color)
-        font = Font(bold=True, color=WHITE, name="Arial", size=9)
-        ws.cell(row=r, column=1, value=label).fill = fill
-        ws.cell(row=r, column=1).font = font
+        fill = _fill(color) if color else None
+        font = Font(bold=True, name="Arial", size=9)
+        lbl  = ws.cell(row=r, column=1, value=label)
+        lbl.font = font
+        if fill:
+            lbl.fill = fill
         src = subtotal_row[sec_key]
         for ci in range(2, last_col + 1):
-            cl = get_column_letter(ci)
+            cl   = get_column_letter(ci)
             cell = ws.cell(row=r, column=ci, value=f"={cl}{src}")
             cell.number_format = euro_fmt
-            cell.fill = fill
             cell.font = font
+            if fill:
+                cell.fill = fill
         row_num[0] += 1
 
     _header_row()
 
-    _section_hdr("INKOMEN", C_INC_HDR)
+    _section_hdr("INKOMEN")
     for cat in INCOME_CATS:
         _data_row(cat)
-    _subtotal_row("Totaal Inkomen", INCOME_CATS, C_INC_SUB, sec_key="inkomen")
+    _subtotal_row("Totaal Inkomen", INCOME_CATS, KLEUR_POSITIEF, sec_key="inkomen")
     _blank()
 
-    _section_hdr("VASTE LASTEN", C_VL_HDR)
+    _section_hdr("VASTE LASTEN")
     for cat in VASTE_LASTEN_CATS:
         _data_row(cat)
-    _subtotal_row("Totaal Vaste Lasten", VASTE_LASTEN_CATS, C_VL_SUB, sec_key="vl")
+    _subtotal_row("Totaal Vaste Lasten", VASTE_LASTEN_CATS, KLEUR_NEGATIEF, sec_key="vl")
     _blank()
 
-    _section_hdr("DAGELIJKSE UITGAVEN", C_DAG_HDR)
+    _section_hdr("DAGELIJKSE UITGAVEN")
     for cat in DAGELIJKS_CATS:
         _data_row(cat)
-    _subtotal_row("Totaal Dagelijks", DAGELIJKS_CATS, C_DAG_SUB, sec_key="dag")
+    _subtotal_row("Totaal Dagelijks", DAGELIJKS_CATS, KLEUR_NEGATIEF, sec_key="dag")
     _blank()
 
-    _section_hdr("OVERIG", C_OVR_HDR)
+    _section_hdr("OVERIG")
     for cat in OVERIG_CATS:
         _data_row(cat)
-    _subtotal_row("Totaal Overig", OVERIG_CATS, C_OVR_SUB, sec_key="overig")
+    _subtotal_row("Totaal Overig", OVERIG_CATS, None, sec_key="overig")
     _blank()
 
-    _section_hdr("INTERNE OVERBOEKINGEN", C_IO_HDR)
+    _section_hdr("INTERNE OVERBOEKINGEN")
     _data_row("Interne Overboeking")
     _blank()
 
-    _section_hdr("SAMENVATTING", C_SAM_HDR)
-    _samenvatting_row("Totaal Inkomen",      "inkomen", C_INC_SUB)
+    _section_hdr("SAMENVATTING")
+    _samenvatting_row("Totaal Inkomen",      "inkomen", KLEUR_POSITIEF)
     _blank()
-    _samenvatting_row("Totaal Vaste Lasten", "vl",      C_VL_SUB)
-    _samenvatting_row("Totaal Dagelijks",    "dag",     C_DAG_SUB)
-    _samenvatting_row("Totaal Overig",       "overig",  C_OVR_SUB)
+    _samenvatting_row("Totaal Vaste Lasten", "vl",      KLEUR_NEGATIEF)
+    _samenvatting_row("Totaal Dagelijks",    "dag",     KLEUR_NEGATIEF)
+    _samenvatting_row("Totaal Overig",       "overig",  None)
 
     EXPENSE_CATS = VASTE_LASTEN_CATS + DAGELIJKS_CATS + [c for c in OVERIG_CATS if c not in KOSTEN_EXCLUDE]
     r    = row_num[0]
-    fill = _fill(C_KOSTEN_ROW)
     font = Font(bold=True, name="Arial", size=9)
-    ws.cell(row=r, column=1, value="Totaal Kosten").fill = fill
-    ws.cell(row=r, column=1).font = font
+    ws.cell(row=r, column=1, value="Totaal Kosten").font = font
     for ci in range(2, n + 2):
-        cl = get_column_letter(ci)
+        cl    = get_column_letter(ci)
         parts = [f"{cl}{row_for_cat[c]}" for c in EXPENSE_CATS if c in row_for_cat]
-        cell = ws.cell(row=r, column=ci,
-                       value=f"=ABS(SUM({','.join(parts)}))" if parts else "=0")
+        cell  = ws.cell(row=r, column=ci,
+                        value=f"=ABS(SUM({','.join(parts)}))" if parts else "=0")
         cell.number_format = euro_fmt
-        cell.fill = fill
         cell.font = font
     fc = get_column_letter(2)
     lc = get_column_letter(n + 1)
     tc = ws.cell(row=r, column=tot_col, value=f"=SUM({fc}{r}:{lc}{r})")
     tc.number_format = euro_fmt
-    tc.fill = fill
     tc.font = font
     if gem_col:
+        denom = past_count if past_count > 0 else 1
         gc = ws.cell(row=r, column=gem_col,
-                     value=f"={get_column_letter(tot_col)}{r}/{n}")
+                     value=f"={get_column_letter(tot_col)}{r}/{denom}")
         gc.number_format = euro_fmt
-        gc.fill = fill
         gc.font = font
     ws.row_dimensions[r].height = 15
     row_num[0] += 1
     _blank()
 
-    r    = row_num[0]
-    font = Font(bold=True, color=WHITE, name="Arial", size=11)
-    ws.cell(row=r, column=1, value="NETTO").font = font
+    df_real     = df[df["category"] != "Interne Overboeking"]
+    netto_color = KLEUR_POSITIEF if df_real["amount"].sum() >= 0 else KLEUR_NEGATIEF
+    netto_fill  = _fill(netto_color)
+    netto_font  = Font(bold=True, name="Arial", size=11)
+
+    r = row_num[0]
+    ws.cell(row=r, column=1, value="NETTO").fill = netto_fill
+    ws.cell(row=r, column=1).font = netto_font
     ws.row_dimensions[r].height = 18
     for ci, _ in enumerate(periods, 2):
-        cl = get_column_letter(ci)
+        cl    = get_column_letter(ci)
         parts = [f"{cl}{sam_row_map[k]}"
                  for k in ("inkomen", "vl", "dag", "overig") if k in sam_row_map]
-        cell = ws.cell(row=r, column=ci, value=f"=SUM({','.join(parts)})")
+        cell  = ws.cell(row=r, column=ci, value=f"=SUM({','.join(parts)})")
         cell.number_format = euro_fmt
-        cell.font = font
+        cell.fill = netto_fill
+        cell.font = netto_font
     fc = get_column_letter(2)
     lc = get_column_letter(n + 1)
     tc = ws.cell(row=r, column=tot_col, value=f"=SUM({fc}{r}:{lc}{r})")
     tc.number_format = euro_fmt
-    tc.font = font
+    tc.fill = netto_fill
+    tc.font = netto_font
     if gem_col:
+        denom = past_count if past_count > 0 else 1
         gc = ws.cell(row=r, column=gem_col,
-                     value=f"={get_column_letter(tot_col)}{r}/{n}")
+                     value=f"={get_column_letter(tot_col)}{r}/{denom}")
         gc.number_format = euro_fmt
-        gc.font = font
-    # Conditional formatting: green when >= 0, red when < 0
-    netto_range = f"B{r}:{get_column_letter(last_col)}{r}"
-    pos_fill = PatternFill("solid", fgColor=C_NETTO_POS)
-    neg_fill = PatternFill("solid", fgColor=C_NETTO_NEG)
-    netto_font = Font(bold=True, color=WHITE, name="Arial", size=11)
-    ws.conditional_formatting.add(netto_range,
-        CellIsRule(operator="greaterThanOrEqual", formula=["0"],
-                   fill=pos_fill, font=netto_font))
-    ws.conditional_formatting.add(netto_range,
-        CellIsRule(operator="lessThan", formula=["0"],
-                   fill=neg_fill, font=netto_font))
-    # Label cell: static color based on current data
-    df_real = df[df["category"] != "Interne Overboeking"]
-    netto_color = C_NETTO_POS if df_real["amount"].sum() >= 0 else C_NETTO_NEG
-    ws.cell(row=r, column=1).fill = _fill(netto_color)
+        gc.fill = netto_fill
+        gc.font = netto_font
 
     ws.column_dimensions["A"].width = 26
     for c in range(2, last_col + 1):
@@ -545,23 +555,32 @@ def write_controle_sheet(ws, df, year_label=""):
 
 
 def save_output(df, year_label=""):
+    import time
     suffix = f" {year_label}" if year_label else ""
     wb = Workbook()
 
+    t0 = time.time()
     ws_tx = wb.active
     write_transactions_sheet(ws_tx, df)
     ws_tx.title = f"Transacties{suffix}"
+    print(f"  Sheet Transacties:      {time.time() - t0:.2f}s")
 
+    t0 = time.time()
     ws_mo = wb.create_sheet()
-    write_overview_sheet(ws_mo, df, group_by="month", tx_sheet_name=ws_tx.title)
+    write_overview_sheet(ws_mo, df, group_by="month", tx_sheet_name=ws_tx.title, year_label=year_label)
     ws_mo.title = f"Maand Overzicht{suffix}"
+    print(f"  Sheet Maand Overzicht:  {time.time() - t0:.2f}s")
 
+    t0 = time.time()
     ws_js = wb.create_sheet()
     write_jaar_samenvatting_sheet(ws_js, df, year_label=year_label,
                                   tx_sheet_name=ws_tx.title)
+    print(f"  Sheet Jaar Samenvatting:{time.time() - t0:.2f}s")
 
+    t0 = time.time()
     ws_ctrl = wb.create_sheet()
     write_controle_sheet(ws_ctrl, df, year_label=year_label)
+    print(f"  Sheet Controle:         {time.time() - t0:.2f}s")
 
     if year_label:
         filename = f"boekhouding_{year_label}.xlsx"
@@ -569,7 +588,9 @@ def save_output(df, year_label=""):
         now = datetime.now().strftime("%Y%m%d_%H%M")
         filename = f"boekhouding_{now}.xlsx"
 
+    t0 = time.time()
     out_path = os.path.join(OUTPUT_DIR, filename)
     wb.save(out_path)
+    print(f"  wb.save():              {time.time() - t0:.2f}s")
     print(f"Opgeslagen: {out_path}")
     return out_path
