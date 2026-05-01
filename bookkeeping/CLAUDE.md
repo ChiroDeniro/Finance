@@ -163,6 +163,8 @@ Keuzes die niet uit de code zelf blijken — bewaar dit voor toekomstige sessies
 | Prompt design rule | One task per prompt, explicit file list, explicit exclusions, one test command, one commit. Prevents freezing. |
 | File size limit | Any file Claude Code reads regularly: max ~150 lines. Over 300 lines and touched every session → split it. |
 | README vs CLAUDE.md | README = for humans who've never seen the project. CLAUDE.md = for Claude Code starting fresh. Never mix audiences. |
+| SUMIFS i.p.v. Python-sommen | Formules blijven correct na handmatige Excel-edits; categorie wijzigen in Transacties herberekent automatisch alle totalen |
+| Sign-guard INCOME_CATS | Voorkomt dat negatieve transacties in inkomen-categorieën (bijv. outgoing familie/hogeschool) de inkomenstotalen vervormen |
 
 **Dagelijks Overig (vangnet)**
 Alle transacties zonder matchende rule landen automatisch in
@@ -174,38 +176,34 @@ blijft altijd zichtbaar in het maandoverzicht, ook als het nul is.
 
 ---
 
-## Current state (as of April 2026)
+## Current state (as of 2026-05-01)
 
 ### What works
-- Full kasboek-style Excel output with 4 colour-coded sheets
+- Full kasboek-style Excel output met 4 colour-coded sheets
 - `--year YYYY` flag for single-year processing
 - Dual-account support: internal transfers between betaalrekening (536542171) and spaarrekening (844835730) are detected and excluded from netto
-- 35 categorisation rules covering the main recurring merchants
-- Terminal summary per month: inkomen | vaste lasten | dagelijks | netto
+- 106 categorisation rules
+- Terminal summary per month: inkomen | vaste lasten | dagelijks | overig | netto
 - Output auto-saves to `C:\Users\chris\Documents\Finance\Kasboek\` if that Drive-synced folder exists
+- **Maand Overzicht en Jaar Samenvatting gebruiken live SUMIFS-formules** — categorie handmatig wijzigen in Transacties-sheet herberekent automatisch alle totalen
+- **Sign-guard op alle INCOME_CATS** — negatieve transacties in inkomen-categorieën gaan automatisch naar Dagelijks Overig
+- **Zorgtoeslag teruggevonden**: belastingdienst-rule hersteld (was Dagelijks Overig, nu Zorgtoeslag → €1.572 inkomen correct)
 
-### Work in progress
-- **2025 full-year rules gap-fill**: current run gives **56% coverage (725/1298 tx)**, 573 uncategorised remain.
-- **Inkomen = €0 for Jan–Sep 2025** — salary/income SEPA rules not matching. Top priority: add rules for the merchants below.
-- **process.py has uncommitted category changes** (249-line diff) — category names diverge from what's documented in CLAUDE.md. Commit or revert before next session.
+### Bekende technische schuld
+- **excel_output.py is 575 regels** — ver boven de 300-regelgrens uit de Ontwerpbeslissingen. Moet gesplitst worden vóór de volgende grote feature.
+- **18 commits lokaal, nog nooit gepusht naar origin/main**
 
-### Top unknowns to fix (open `Onbekend 2025` sheet, add keywords to rules.xlsx)
-| Priority | Merchant | Count | Amount | Likely category |
-|----------|----------|-------|--------|-----------------|
-| 1 | J.P.Q. Hoyng — Huur SJ 109 | 12 | -€5,851 | Huur & Wonen |
-| 2 | D. van Rhijn e | 7 | +€5,200 | Salaris / Inkomsten Overig |
-| 3 | Optimal Solutions | 3 | +€4,200 | Salaris |
-| 4 | Dhr. C. van Rhijn | 1 | +€1,800 | Salaris / Inkomsten Overig |
-| 5 | Christiaan Van Rhijn — WDR leeg | 1 | +€1,705 | Inkomsten Overig |
-| 6 | RHIJN D VAN en | 1 | -€1,050 | Diversen |
-| 7 | Revolut (eCom Apple Pay) | 3 | -€400 | Dagelijks Overig |
+### Coverage 2025
+- ~73% (936/1280 reële transacties), 344 in Dagelijks Overig
+- "Onbekend"-sheet bestaat niet meer — uncategorised transacties landen in Dagelijks Overig (zichtbaar in Maand Overzicht)
+- 2026 spaarrekening TAB-bestand ontbreekt nog → geen interne overboekingen detecteerbaar voor 2026
 
 ### Next session checklist
-1. Decide: commit or revert uncommitted process.py changes (category rename)
-2. Open `boekhouding_2025.xlsx` → sheet `Onbekend 2025`
-3. Add missing SEPA NAME keywords to `rules.xlsx` — start with rows 1–5 in table above
-4. Rerun `python -X utf8 process.py --year 2025` until ≥90% coverage
-5. Commit `rules.xlsx` and updated output notes
+1. Voer `git status` + `git log --oneline -5` uit vóór je iets doet
+2. Push de 18 lokale commits naar origin/main
+3. Split excel_output.py op (doel: ≤300 regels per bestand)
+4. Coverage 2025 verhogen: open `boekhouding_2025.xlsx` → filter Dagelijks Overig → voeg regels toe aan rules.xlsx
+5. 2026 spaarrekening TAB-bestand exporteren en toevoegen aan input/
 
 ---
 
@@ -250,9 +248,10 @@ Rule: if a file is over 300 lines and touched every session, split it.
 
 ## Sessie starten
 
-1. Lees dit bestand — vooral "Current state"
-2. Plak een prompt uit `README_PROMPTS.md` en pas aan
-3. Commit na elke werkende feature
+1. Voer altijd `git status` + `git log --oneline -5` uit vóór je iets doet
+2. Lees dit bestand — vooral "Current state"
+3. Plak een prompt uit `README_PROMPTS.md` en pas aan
+4. Commit na elke werkende feature
 
 ---
 

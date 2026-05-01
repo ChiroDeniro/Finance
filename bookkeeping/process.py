@@ -14,7 +14,7 @@ Output: /output/boekhouding_YYYYMMDD_HHMM.xlsx  with:
 import os
 import sys
 
-from config import RULES_FILE, INCOME_CATS, VASTE_LASTEN_CATS, DAGELIJKS_CATS, MAANDEN_NL, dutch_euros
+from config import RULES_FILE, INCOME_CATS, VASTE_LASTEN_CATS, DAGELIJKS_CATS, OVERIG_CATS, MAANDEN_NL, dutch_euros
 from loader import find_input_files, load_transactions
 from categoriser import load_rules, apply_categories, detect_internal_transfers, create_starter_rules, migrate_rules
 from excel_output import save_output
@@ -66,22 +66,26 @@ def main():
         inc  = mdf[mdf["category"].isin(INCOME_CATS)]["amount"].sum()
         vl   = mdf[mdf["category"].isin(VASTE_LASTEN_CATS)]["amount"].sum()
         dag  = mdf[mdf["category"].isin(DAGELIJKS_CATS)]["amount"].sum()
+        ovr  = mdf[mdf["category"].isin(OVERIG_CATS)]["amount"].sum()
         net  = mdf["amount"].sum()
         yr, mo = m.split("-")
         label  = f"{MAANDEN_NL[int(mo)]} {yr}"
         print(f"  {label:<10}  |  in: {dutch_euros(inc):<10}"
               f"  |  vaste lasten: {dutch_euros(vl):<10}"
               f"  |  dagelijks: {dutch_euros(dag):<10}"
+              f"  |  overig: {dutch_euros(ovr):<10}"
               f"  |  netto: {dutch_euros(net)}")
 
     t_inc = df_real[df_real["category"].isin(INCOME_CATS)]["amount"].sum()
     t_vl  = df_real[df_real["category"].isin(VASTE_LASTEN_CATS)]["amount"].sum()
     t_dag = df_real[df_real["category"].isin(DAGELIJKS_CATS)]["amount"].sum()
+    t_ovr = df_real[df_real["category"].isin(OVERIG_CATS)]["amount"].sum()
     t_net = df_real["amount"].sum()
-    print("  " + "-" * 80)
+    print("  " + "-" * 90)
     print(f"  {'Totaal':<10}  |  in: {dutch_euros(t_inc):<10}"
           f"  |  vaste lasten: {dutch_euros(t_vl):<10}"
           f"  |  dagelijks: {dutch_euros(t_dag):<10}"
+          f"  |  overig: {dutch_euros(t_ovr):<10}"
           f"  |  netto: {dutch_euros(t_net)}")
     print(f"\n  Output: {out}\n")
 

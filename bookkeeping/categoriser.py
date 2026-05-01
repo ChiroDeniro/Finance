@@ -3,7 +3,7 @@ import pandas as pd
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font
 
-from config import RULES_FILE, OWN_ACCOUNTS, C_HEADER, WHITE, _fill, get_iban_rules
+from config import RULES_FILE, OWN_ACCOUNTS, C_HEADER, WHITE, _fill, get_iban_rules, INCOME_CATS
 
 
 def load_rules():
@@ -47,8 +47,9 @@ def apply_categories(df, rules):
         return cat if cat else categorise(row["merchant"], rules)
 
     df["category"] = df.apply(_cat, axis=1)
-    # ZZP Opname is only valid for incoming transactions
-    df.loc[(df["category"] == "ZZP Opname") & (df["amount"] < 0), "category"] = "Dagelijks Overig"
+    # Income categories are only valid for incoming transactions
+    for cat in INCOME_CATS:
+        df.loc[(df["category"] == cat) & (df["amount"] < 0), "category"] = "Dagelijks Overig"
     print(f"Gecategoriseerd: {len(df)} transacties  (fallback → Dagelijks Overig)")
     return df
 
@@ -100,7 +101,7 @@ KEYWORD_OVERRIDES = {
     "bol.com":           "Dagelijks Overig",
     "media markt":       "Dagelijks Overig",
     "laurenskerk":       "Cultuur & Entertainment",
-    "belastingdienst":   "Dagelijks Overig",
+    "belastingdienst":   "Zorgtoeslag",
     "sportcity":         "Sport & Fitness",
     "david lloyd":       "Sport & Fitness",
     "youfone":           "Telefoon & Internet",

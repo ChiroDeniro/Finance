@@ -49,7 +49,7 @@ DAGELIJKS_CATS = [
 OVERIG_CATS = ["Sparen", "Beleggen"]
 
 # Categories excluded from Totaal Kosten in SAMENVATTING
-KOSTEN_EXCLUDE = frozenset({"Beleggen"})
+KOSTEN_EXCLUDE = frozenset()
 
 ALL_KNOWN_CATS = INCOME_CATS + VASTE_LASTEN_CATS + DAGELIJKS_CATS + OVERIG_CATS
 
