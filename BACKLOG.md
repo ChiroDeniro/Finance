@@ -45,5 +45,34 @@
       to every prompt in README_PROMPTS.md so stale prompts
       are visible
 
+## DeGiro + Bitvavo overzicht
+
+**Doel:** Compleet financieel overzicht — niet alleen wat je uitgeeft,
+maar ook waar je geld staat en naartoe gaat.
+
+DeGiro map:  bookkeeping/input/DeGiro/
+Bitvavo map: bookkeeping/input/Bitvavo - crypto/
+
+### Wat bouwen
+- Lees DeGiro CSV export in (transacties + portfolio)
+- Lees Bitvavo CSV export in (transacties + saldo)
+- Aparte sheet "Vermogen" in de Excel output met:
+    - ABN betaalrekening saldo (uit TAB)
+    - ABN spaarrekening saldo (uit TAB)
+    - Revolut saldo (uit CSV)
+    - DeGiro portfolio waarde
+    - Bitvavo crypto waarde (in EUR)
+    - Totaal vermogen = som van alles
+- Maandelijks momentopname zodat je trend ziet over tijd
+- Storting naar DeGiro/Bitvavo vanuit ABN → Interne Overboeking
+  (niet als uitgave tellen, geld blijft van jou)
+
+### Waarom
+Je beheert nu geld op 4 plekken (ABN, Revolut, DeGiro, Bitvavo).
+Zonder overzicht weet je niet wat je totaal hebt of hoe het verschuift.
+Dit maakt het project compleet als persoonlijk financieel dashboard.
+
+---
+
 ## Graveyard — decided against
 - ~~Supabase + Vercel dashboard~~ — overkill for local use, local Excel is faster to build and easier to debug
