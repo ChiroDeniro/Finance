@@ -1,15 +1,7 @@
 # Finance — Personal Bookkeeping System
 
-Personal finance automation for ABN AMRO bank accounts. Replaces manual Excel kasboek.
-
----
-
-## Project
-
-Personal finance automation for Chris (Den Haag).
-Two ABN AMRO accounts — betaalrekening (personal) and spaarrekening. Replaces a manual Excel kasboek that broke down when unknowns weren't tracked and year summaries drifted from reality.
-
-Design principles: local first, one command to run, transparent Excel output with visible formulas, incremental modules built in phases.
+Personal finance automation for Chris (Den Haag). Replaces a manual Excel kasboek.
+Supports ABN AMRO (betaal + spaar), Revolut, and Knab zakelijke rekening.
 
 ---
 
@@ -19,77 +11,90 @@ Design principles: local first, one command to run, transparent Excel output wit
 cd bookkeeping
 pip install pandas openpyxl   # first time only
 
-python process.py              # process all TAB files in input/
-python process.py --year 2025  # process only 2025 transactions
+python -X utf8 process.py --year 2026   # one year
+python -X utf8 process.py               # all years + Knab
 ```
 
-Drop `.TAB` files in `bookkeeping/input/` first (gitignored). Output lands in `bookkeeping/output/`.
-
-> **Windows terminal note:** use `python -X utf8 process.py` if you get encoding errors.
+Drop exports in the right input subfolder (see below) before running.
 
 ---
 
-## What it produces
+## Input
 
-One Excel file with 4 sheets:
+| Folder | Source | Format |
+|--------|--------|--------|
+| `input/ABN spaar en betaal/` | ABN AMRO betaal + spaarrekening | `.TAB` — Excel (TXT) export |
+| `input/Revolut/` | Revolut | `.CSV` — Dutch export (Status=VOLTOOID) |
+| `input/ODS/` | Knab zakelijke rekening | `.CSV` — Knab export |
+
+All folders are gitignored. Duplicates are removed automatically.
+
+### ABN AMRO export
+Internetbankieren → Bij/Afschriften → Exporteren → **Excel (TXT)** → save as `.TAB`
+
+### Revolut export
+App → Profile → Statements → Export → **CSV** (Dutch)
+
+---
+
+## Output
+
+| File | Contents |
+|------|----------|
+| `output/boekhouding_YYYY.xlsx` | ABN + Revolut per jaar |
+| `output/boekhouding_alles.xlsx` | All years combined (master) |
+| `output/boekhouding_knab.xlsx` | Knab zakelijke rekening |
+
+Sheets in `boekhouding_YYYY.xlsx`:
 
 | Sheet | Contents |
 |-------|----------|
-| Transacties | All transactions, date-sorted, auto-filter, colour-coded by type |
-| Maand Overzicht | Income/expense by category, columns = months, totals + average |
-| Jaar Samenvatting | Full-year totals per category + % van inkomen |
-| Onbekend | Unknown merchants grouped, sorted by amount — fill in categories here |
+| Transacties | All transactions, date-sorted, auto-filter, Bron column (ABN/Revolut) |
+| Maand Overzicht | Income/expense by category × month, SUMIFS formulas stay live |
+| Onbekende Transacties | Unmatched transactions (Dagelijks Overig) |
+| Controle | Balance check |
+| Saldo Overzicht | Opening balance per month (betaal + spaar) |
 
----
-
-## Input format
-
-ABN AMRO → Internetbankieren → Bij/Afschriften → Exporteren → **Excel (TXT)**
-
-Saves as a `.TAB` file. Tab-separated, 8 columns, no header:
-
-| Col | Field | Example |
-|-----|-------|---------|
-| 0 | Account number | 536542171 |
-| 1 | Currency | EUR |
-| 2 | Date (YYYYMMDD) | 20250321 |
-| 3 | Balance before | 211,90 |
-| 4 | Balance after | 192,48 |
-| 5 | Value date | 20250321 |
-| 6 | Amount (comma decimal) | -19,42 |
-| 7 | Description | BEA, Apple Pay   Albert Heijn 1870... |
-
-Multiple accounts or files in one run are fine — duplicates are removed automatically.
-
-**Two accounts (betaalrekening + spaarrekening):** transfers between them are detected and tagged as *Interne Overboeking* — they appear in Transacties but are excluded from all totals and netto calculations.
+Output auto-saves to `C:\Users\chris\Documents\Finance\Kasboek\` if that folder exists.
 
 ---
 
 ## Categories
 
-Defined in `rules.xlsx` (Sheet: **Rules**). Rules use case-insensitive keyword matching on the merchant name. First match wins — put specific rules above general ones.
+Defined in `rules.xlsx` (Sheet: **Rules**). Keyword matching on merchant name — first match wins.
 
 ### INKOMEN
-`Salaris` · `DUO / Studiefinanciering` · `Zorgtoeslag` · `Familie & Giften` · `Inkomsten Overig`
+`Salaris` · `DUO / Studiefinanciering` · `Zorgtoeslag` · `Familie & Giften` · `ZZP Opname` · `ZZP Inkomen` · `Inkomsten Overig`
 
 ### VASTE LASTEN
-`Huur & Wonen` · `Zorgverzekering` · `Telefoon & Internet` · `Bankkosten` · `Abonnementen`
+`Huur` · `Inclusief Huur` · `Zorgverzekering` · `Telefoon & Internet` · `Bankkosten` · `Abonnementen` · `Sport & Fitness` · `Onderhoud` · `Belasting`
 
 ### DAGELIJKSE UITGAVEN
-`Boodschappen` · `Eten & Drinken` · `OV & Reizen` · `Sport & Fitness` · `Online Winkelen` · `Kleding` · `Gezondheid` · `Tabak` · `Cultuur & Entertainment` · `Studie`
+`Boodschappen` · `Eten & Drinken` · `Uitgaan` · `OV & Reizen` · `Kleding` · `Kapper` · `Gezondheid` · `WbW` · `Cultuur & Entertainment` · `Studie` · `Dagelijks Overig`
 
 ### OVERIG
-`Sparen` · `Diversen`
+`Sparen` · `Beleggen` · `Zakelijke Kosten`
 
-To fix an unknown: add a row to `rules.xlsx` → Sheet Rules → keyword + category. Re-run the script.
+Unknowns land in **Dagelijks Overig**. To fix: add a row to `rules.xlsx` → re-run.
 
 ---
 
-## Other flags
+## Internal transfers
+
+Transfers between own accounts are tagged **Interne Overboeking** and excluded from all totals:
+- ABN betaal ↔ spaar: detected by matching account numbers in description
+- ABN → Revolut: matched via Revolut IBAN in description (`revonl22` in `config.json`)
+- Revolut → own bank: Revolut `Geld toevoegen` type is always internal
+
+---
+
+## Flags
 
 ```bash
-python process.py --create-rules   # regenerate rules.xlsx from scratch (overwrites!)
-python process.py --migrate-rules  # rename old category names to new system
+python -X utf8 process.py --year 2025      # filter to one year
+python -X utf8 process.py --knab-only      # only process Knab
+python -X utf8 process.py --create-rules   # regenerate rules.xlsx from scratch (overwrites!)
+python -X utf8 process.py --migrate-rules  # rename old category names
 ```
 
 ---
@@ -97,37 +102,27 @@ python process.py --migrate-rules  # rename old category names to new system
 ## Folder structure
 
 ```
-finance/
-├── CLAUDE.md
-├── README.md
-├── README_PROMPTS.md          ← reusable prompt templates
-├── BACKLOG.md                 ← ideas, planned features, work in progress
-└── bookkeeping/
-    ├── process.py             ← main entry point
-    ├── loader.py              ← TAB reading + validation
-    ├── categoriser.py         ← rules matching
-    ├── excel_output.py        ← Excel writing + styling
-    ├── config.py              ← constants + paths
-    ├── receipt_scanner.py     ← (planned) receipt OCR
-    ├── tax_report.py          ← (planned) tax overview
-    ├── annual_report.py       ← (planned) year report
-    ├── rules.xlsx
-    ├── input/
-    ├── receipts/              ← drop receipts/invoices here
-    └── output/
+bookkeeping/
+├── process.py             ← main entry point
+├── loader.py              ← ABN AMRO TAB reader
+├── loader_revolut.py      ← Revolut CSV reader
+├── loader_knab.py         ← Knab CSV reader
+├── categoriser.py         ← rules matching
+├── excel_output.py        ← workbook factory
+├── sheet_transactions.py  ← Transacties sheet
+├── sheet_overview.py      ← Maand Overzicht
+├── sheet_controle.py      ← Controle sheet
+├── sheet_knab.py          ← Knab sheets
+├── config.py              ← constants + paths
+├── config.json            ← account labels, IBAN rules
+├── rules.xlsx             ← categorisation rules (edit this)
+├── input/
+│   ├── ABN spaar en betaal/   ← drop .TAB files here
+│   ├── Revolut/               ← drop Revolut .CSV files here
+│   └── ODS/                   ← drop Knab .CSV files here
+├── receipts/              ← drop receipts/invoices here
+└── output/                ← all Excel outputs (gitignored)
 ```
-
----
-
-## Roadmap
-
-| # | Module | Status |
-|---|--------|--------|
-| 1 | process.py — bank file import + categorisation | ✅ done |
-| 2 | receipt_scanner.py — receipt OCR + matching | planned |
-| 3 | tax_report.py — BTW + IB aangifte export | planned |
-| 4 | annual_report.py — year report + forecast | planned |
-| 5 | Dashboard — visualisation + net worth | planned |
 
 ---
 
