@@ -70,7 +70,15 @@ def load_transactions(files):
         validate_tab_file(raw, f)
         dfs.append(raw)
 
-    df = pd.concat(dfs, ignore_index=True).drop_duplicates()
+    df = pd.concat(dfs, ignore_index=True)
+    rijen_voor = len(df)
+    df = df.drop_duplicates(
+        subset=["account", "date", "amount", "description"],
+        keep="first",
+    )
+    n_dubbel = rijen_voor - len(df)
+    if n_dubbel > 0:
+        print(f"  Deduplicatie: {n_dubbel} dubbele rijen verwijderd")
     df["date"]        = pd.to_datetime(df["date"], format="%Y%m%d")
     df["month"]       = df["date"].dt.to_period("M").astype(str)
     df["year"]        = df["date"].dt.year.astype(str)
