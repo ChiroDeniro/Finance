@@ -15,9 +15,14 @@ import os
 import glob
 import pandas as pd
 
-from config import INPUT_DIR
+from config import INPUT_DIR, load_config
 
 REVOLUT_DIR = os.path.join(INPUT_DIR, "Revolut")
+
+
+def _own_ibans():
+    cfg = load_config()
+    return {v["iban"].upper() for v in cfg.get("accounts", {}).values() if v.get("iban")}
 
 
 def find_revolut_files():
@@ -88,7 +93,19 @@ def _load_one(filepath):
     date = pd.to_datetime(raw["Datum voltooid"], format="%Y-%m-%d %H:%M:%S", errors="coerce")
     amount = raw["Bedrag"].astype(float)
     description = raw["Beschrijving"].fillna("")
-    is_transfer = raw["Type"].str.strip() == "Overschrijving"
+
+    own = _own_ibans()
+
+    def _is_internal(row):
+        typ  = row["Type"].strip().lower()
+        desc = row["Beschrijving"].upper()
+        if typ == "geld toevoegen":           # top-up from own bank to Revolut
+            return True
+        if typ == "overschrijving":           # only internal if destination is own IBAN
+            return any(iban in desc for iban in own)
+        return False
+
+    is_transfer = raw.apply(_is_internal, axis=1)
 
     result = pd.DataFrame({
         "account":             "Revolut",
