@@ -1,12 +1,16 @@
 {
   "accounts": {
     "536542171": {
-      "label": "",
-      "iban": ""
+      "label": "Betaalrekening",
+      "iban": "NL98ABNA0536542171"
     },
     "844835730": {
-      "label": "",
+      "label": "Spaarrekening",
       "iban": ""
+    },
+    "NL73KNAB0776712705": {
+      "label": "Zakelijke Rekening (Knab)",
+      "iban": "NL73KNAB0776712705"
     }
   },
   "iban_rules": {

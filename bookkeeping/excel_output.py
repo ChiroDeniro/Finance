@@ -13,6 +13,7 @@ from config import OUTPUT_DIR, ACCOUNT_LABELS, MAANDEN_NL, C_HEADER, WHITE, _fil
 from sheet_transactions import write_transactions_sheet
 from sheet_overview import write_overview_sheet
 from sheet_controle import write_controle_sheet
+from sheet_knab import write_knab_jaaroverzicht, write_knab_uitschieters
 
 
 def _betaal_df(df):
@@ -135,6 +136,43 @@ def save_year_output(df, year):
     t0 = time.time()
     wb.save(out_path)
     print(f"  wb.save():              {time.time() - t0:.2f}s")
+    print(f"Opgeslagen: {out_path}")
+    return out_path
+
+
+def save_knab_output(df):
+    """Generate boekhouding_knab.xlsx for the Knab zakelijke rekening."""
+    wb = Workbook()
+
+    t0 = time.time()
+    ws_tx = wb.active
+    write_transactions_sheet(ws_tx, df.sort_values("date", ascending=False))
+    ws_tx.title = "Transacties"
+    print(f"  Sheet Transacties:           {time.time() - t0:.2f}s")
+
+    t0 = time.time()
+    ws_mo = wb.create_sheet()
+    write_overview_sheet(ws_mo, df, group_by="month",
+                         tx_sheet_name="Transacties", year_label="")
+    ws_mo.title = "Maand Overzicht"
+    print(f"  Sheet Maand Overzicht:       {time.time() - t0:.2f}s")
+
+    t0 = time.time()
+    ws_jr = wb.create_sheet()
+    write_knab_jaaroverzicht(ws_jr, df)
+    ws_jr.title = "Jaar Vergelijking"
+    print(f"  Sheet Jaar Vergelijking:     {time.time() - t0:.2f}s")
+
+    t0 = time.time()
+    ws_ui = wb.create_sheet()
+    write_knab_uitschieters(ws_ui, df)
+    ws_ui.title = "Uitschieters"
+    print(f"  Sheet Uitschieters:          {time.time() - t0:.2f}s")
+
+    out_path = os.path.join(OUTPUT_DIR, "boekhouding_knab.xlsx")
+    t0 = time.time()
+    wb.save(out_path)
+    print(f"  wb.save():                   {time.time() - t0:.2f}s")
     print(f"Opgeslagen: {out_path}")
     return out_path
 

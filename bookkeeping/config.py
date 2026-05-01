@@ -21,6 +21,7 @@ INCOME_CATS = [
     "Zorgtoeslag",
     "Familie & Giften",
     "ZZP Opname",
+    "ZZP Inkomen",
     "Inkomsten Overig",
 ]
 VASTE_LASTEN_CATS = [
@@ -32,6 +33,7 @@ VASTE_LASTEN_CATS = [
     "Abonnementen",
     "Sport & Fitness",
     "Onderhoud",
+    "Belasting",
 ]
 DAGELIJKS_CATS = [
     "Boodschappen",
@@ -46,7 +48,7 @@ DAGELIJKS_CATS = [
     "Studie",
     "Dagelijks Overig",
 ]
-OVERIG_CATS = ["Sparen", "Beleggen"]
+OVERIG_CATS = ["Sparen", "Beleggen", "Zakelijke Kosten"]
 
 # Categories excluded from Totaal Kosten in SAMENVATTING
 KOSTEN_EXCLUDE = frozenset()
@@ -55,8 +57,9 @@ ALL_KNOWN_CATS = INCOME_CATS + VASTE_LASTEN_CATS + DAGELIJKS_CATS + OVERIG_CATS
 
 OWN_ACCOUNTS = {"536542171", "844835730"}
 ACCOUNT_LABELS = {
-    "536542171": "Betaalrekening",
-    "844835730": "Spaarrekening",
+    "536542171":          "Betaalrekening",
+    "844835730":          "Spaarrekening",
+    "NL73KNAB0776712705": "Zakelijke Rekening (Knab)",
 }
 
 # ── Colors ────────────────────────────────────────────────────────────────────

@@ -2,4 +2,6 @@ bookkeeping/input/
 bookkeeping/output/
 bookkeeping/receipts/
 bookkeeping/__pycache__/
+business/output/
+business/__pycache__/
 *.pyc

@@ -15,8 +15,9 @@ import time
 
 from config import RULES_FILE, INCOME_CATS, VASTE_LASTEN_CATS, DAGELIJKS_CATS, OVERIG_CATS, MAANDEN_NL, dutch_euros
 from loader import find_input_files, load_transactions
+from loader_knab import find_knab_files, load_knab_transactions, apply_knab_categories
 from categoriser import load_rules, apply_categories, detect_internal_transfers, create_starter_rules, migrate_rules
-from excel_output import save_year_output, save_master_output
+from excel_output import save_year_output, save_master_output, save_knab_output
 
 
 def _print_verificatie(df):
@@ -67,6 +68,11 @@ def _print_summary(df):
 def main():
     if "--migrate-rules" in sys.argv:
         migrate_rules()
+        return
+
+    if "--knab-only" in sys.argv:
+        rules = load_rules()
+        _process_knab(rules)
         return
 
     if "--create-rules" in sys.argv or not os.path.exists(RULES_FILE):
@@ -129,6 +135,48 @@ def main():
         for o in outputs:
             print(f"  Output: {o}")
         print()
+
+    _process_knab(rules)
+
+
+def _process_knab(rules):
+    print("\n--- Knab Zakelijke Rekening ---")
+    knab_files = find_knab_files()
+    if not knab_files:
+        print("Geen Knab CSV-bestanden gevonden in input/ODS/ — overgeslagen.")
+        return
+
+    print(f"Gevonden: {len(knab_files)} Knab bestand(en)")
+    for f in knab_files:
+        print(f"  {os.path.basename(f)}")
+
+    t0 = time.time()
+    df_knab = load_knab_transactions(knab_files)
+    if df_knab is None or df_knab.empty:
+        print("Geen Knab transacties geladen.")
+        return
+    print(f"Stap 1 (inlezen Knab):   {time.time() - t0:.2f}s")
+
+    t0 = time.time()
+    df_knab = apply_knab_categories(df_knab, rules)
+    print(f"Stap 2 (categoriseren):  {time.time() - t0:.2f}s")
+
+    df_real = df_knab[df_knab["category"] != "Interne Overboeking"]
+    print("\n" + "=" * 50)
+    print("KNAB VERIFICATIE TOTALEN")
+    print("=" * 50)
+    print(f"1. Totaal transacties (incl. interne ob):  {len(df_knab)}")
+    print(f"2. Som ALLE bedragen (incl. interne ob):   {df_knab['amount'].sum():.2f}")
+    print(f"3. Som CREDIT (positief, excl. int. ob):   {df_real[df_real['amount'] > 0]['amount'].sum():.2f}")
+    print(f"4. Som DEBET  (negatief, excl. int. ob):   {df_real[df_real['amount'] < 0]['amount'].sum():.2f}")
+    print(f"5. Interne overboekingen:                  {(df_knab['category'] == 'Interne Overboeking').sum()}")
+    print(f"6. Zakelijke Kosten (onbekend):            {(df_knab['category'] == 'Zakelijke Kosten').sum()}")
+    print("=" * 50)
+
+    t0 = time.time()
+    out = save_knab_output(df_knab)
+    print(f"Stap 3 (Excel output):   {time.time() - t0:.2f}s")
+    print(f"\n  Output: {out}\n")
 
 
 if __name__ == "__main__":
