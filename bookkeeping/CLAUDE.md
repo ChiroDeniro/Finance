@@ -18,19 +18,37 @@ Goal: replace manual Excel kasboek with a fully automated system.
 ```
 finance/
 ├── CLAUDE.md                          ← you are here
+├── BACKLOG.md                         ← prioritised task list
 ├── README.md                          ← human-readable project overview
 ├── README_PROMPTS.md                  ← bewezen prompts per taak
-└── bookkeeping/
-    ├── process.py                     ← hoofdscript — bankbestanden verwerken
-    ├── receipt_scanner.py             ← (gepland) bonnetjes OCR en matching
-    ├── tax_report.py                  ← (gepland) belastingaangifte overzicht
-    ├── annual_report.py               ← (gepland) jaarverslag en prognose
-    ├── rules.xlsx                     ← categorisatieregels (keyword → categorie)
-    ├── input/                         ← drop .TAB bestanden hier (gitignored)
-    ├── receipts/                      ← drop bonnetjes/facturen hier (gitignored)
-    ├── output/                        ← alle Excel outputs (gitignored)
-    └── InfoFiles/
-        └── Jaaroverzichten_kasboekken.xlsx  ← oud kasboek 2023 (referentie)
+├── bookkeeping/
+│   ├── process.py                     ← hoofdscript — ABN + Knab verwerken
+│   ├── loader.py                      ← ABN AMRO TAB bestanden inlezen
+│   ├── loader_knab.py                 ← Knab CSV bestanden inlezen
+│   ├── categoriser.py                 ← categorisatielogica + rules.xlsx beheer
+│   ├── config.py                      ← constanten: categorieën, kleuren, paden
+│   ├── config.json                    ← account labels + IBAN-regels
+│   ├── excel_output.py                ← workbook factory (delegeert aan sheet_*.py)
+│   ├── sheet_transactions.py          ← Transacties sheet
+│   ├── sheet_overview.py              ← Maand Overzicht + Jaar Overzicht
+│   ├── sheet_jaar.py                  ← Jaar Samenvatting
+│   ├── sheet_spaar.py                 ← Spaarrekening sheet
+│   ├── sheet_controle.py              ← Controle sheet
+│   ├── sheet_knab.py                  ← Knab: Jaar Vergelijking + Uitschieters
+│   ├── rules.xlsx                     ← categorisatieregels (keyword → categorie)
+│   ├── input/                         ← drop .TAB bestanden hier (gitignored)
+│   │   └── ODS/                       ← drop Knab .CSV bestanden hier (gitignored)
+│   ├── receipts/                      ← drop bonnetjes/facturen hier (gitignored)
+│   ├── output/                        ← alle Excel outputs (gitignored)
+│   └── InfoFiles/
+│       └── Jaaroverzichten_kasboekken.xlsx  ← oud kasboek 2023 (referentie)
+└── business/
+    ├── networth.py                    ← netto vermogen Excel snapshot
+    ├── networth_config.py             ← handmatige invoer: beleggingen, schulden, etc.
+    ├── scan_ollama.py                 ← facturen OCR via Ollama llava (JPG/PNG)
+    ├── config.py                      ← paden naar factuurmappen
+    ├── README_ollama.md               ← gebruik scan_ollama.py
+    └── output/                        ← Excel outputs (gitignored)
 ```
 
 ---
@@ -67,15 +85,25 @@ Two description formats:
 
 ```bash
 cd bookkeeping
-python process.py                  # process all TAB files
+python process.py                  # process all TAB + Knab files
 python process.py --year 2025      # filter to one year
+python process.py --knab-only      # only process Knab zakelijke rekening
 python process.py --create-rules   # regenerate rules.xlsx from scratch
 python process.py --migrate-rules  # rename old category names to current system
+
+cd business
+python networth.py                 # generate netto vermogen snapshot
+python scan_ollama.py              # scan facturen via Ollama llava
 ```
 
 On Windows, prefix with `python -X utf8` to avoid terminal encoding errors.
 
 Dependencies: `pip install pandas openpyxl`
+Ollama (for scan_ollama.py): `ollama pull llava`
+
+### Input directories
+- `bookkeeping/input/*.TAB` — ABN AMRO Excel (TXT) exports
+- `bookkeeping/input/ODS/*.csv` — Knab zakelijke rekening exports
 
 ---
 
@@ -89,6 +117,7 @@ Inspired by the old kasboek in InfoFiles/. Two blocks: INKOMEN and UITGAVEN.
 - Zorgtoeslag
 - Familie & Giften
 - ZZP Opname
+- ZZP Inkomen
 - Inkomsten Overig
 
 ### VASTE LASTEN
@@ -100,6 +129,7 @@ Inspired by the old kasboek in InfoFiles/. Two blocks: INKOMEN and UITGAVEN.
 - Abonnementen
 - Sport & Fitness
 - Onderhoud
+- Belasting
 
 ### DAGELIJKSE UITGAVEN
 - Boodschappen
@@ -117,6 +147,7 @@ Inspired by the old kasboek in InfoFiles/. Two blocks: INKOMEN and UITGAVEN.
 ### OVERIG
 - Sparen
 - Beleggen
+- Zakelijke Kosten
 
 **Important:** Always use these exact category names. rules.xlsx and process.py must stay in sync.
 
@@ -179,33 +210,37 @@ blijft altijd zichtbaar in het maandoverzicht, ook als het nul is.
 ## Current state (as of 2026-05-01)
 
 ### What works
-- Full kasboek-style Excel output met 4 colour-coded sheets
-- `--year YYYY` flag for single-year processing
-- Dual-account support: internal transfers between betaalrekening (536542171) and spaarrekening (844835730) are detected and excluded from netto
-- 106 categorisation rules
+- Full kasboek-style Excel output per jaar + masterbestand
+- `--year YYYY` flag for single-year processing; `--knab-only` for Knab only
+- Dual-account support: internal transfers between betaalrekening (536542171) and spaarrekening (844835730) detected and excluded from netto
+- **Knab zakelijke rekening**: CSV loader + dedicated Excel (Transacties, Maand Overzicht, Jaar Vergelijking, Uitschieters)
+- IBAN-first categorisation for Knab (counterparty IBAN → category, overrides keyword matching)
+- 106+ categorisation rules
 - Terminal summary per month: inkomen | vaste lasten | dagelijks | overig | netto
 - Output auto-saves to `C:\Users\chris\Documents\Finance\Kasboek\` if that Drive-synced folder exists
 - **Maand Overzicht en Jaar Samenvatting gebruiken live SUMIFS-formules** — categorie handmatig wijzigen in Transacties-sheet herberekent automatisch alle totalen
 - **Sign-guard op alle INCOME_CATS** — negatieve transacties in inkomen-categorieën gaan automatisch naar Dagelijks Overig
-- **Zorgtoeslag teruggevonden**: belastingdienst-rule hersteld (was Dagelijks Overig, nu Zorgtoeslag → €1.572 inkomen correct)
-- **Kleurstijl vereenvoudigd**: alleen 4 rijen gekleurd via KLEUR_POSITIEF / KLEUR_NEGATIEF constanten
 - **Alle 12 maanden zichtbaar** in Maand Overzicht, ook als er geen transacties zijn
-- **NETTO-rij toegevoegd** in Maand Overzicht
+- **NETTO-rij** in Maand Overzicht; **Onbekende Transacties** sheet naast Controle en Saldo Overzicht
+- **business/networth.py** — netto vermogen snapshot (ABN saldi auto-gelezen uit TAB; Knab + beleggingen + schulden handmatig in networth_config.py)
+- **business/scan_ollama.py** — facturen OCR via Ollama llava (JPG/PNG; PDF's worden overgeslagen)
+- **fix: Knab→ABN transfers niet meer als Interne Overboeking** — OWN_ACCOUNTS bevat alleen de twee ABN rekeningen; Knab-zijde wordt afgehandeld door loader_knab.py
 
 ### Bekende technische schuld
-- **excel_output.py is 596 regels** — ver boven de 300-regelgrens. Splitsing is de volgende taak: sheet_data / sheet_overview / sheet_jaar / sheet_controle.
 - 2026 spaarrekening TAB-bestand ontbreekt nog → geen interne overboekingen detecteerbaar voor 2026
+- scan_ollama.py verwerkt geen PDFs — Ollama llava ondersteunt alleen afbeeldingen
+- config.json: spaarrekening IBAN nog niet ingevuld
 
 ### Coverage
-- **2025**: ~73% (936/1280 reële transacties), 344 in Dagelijks Overig
-- **2026**: ~92% (366/396 transacties), 30 in Dagelijks Overig
-- "Onbekend"-sheet bestaat niet meer — uncategorised transacties landen in Dagelijks Overig (zichtbaar in Maand Overzicht)
+- **2025**: ~74% (~960/1280 reële transacties), ~338 in Dagelijks Overig
+- **2026**: ~92% (~366/396 transacties), ~30 in Dagelijks Overig
+- Uncategorised transacties landen in Dagelijks Overig (zichtbaar in Maand Overzicht + Onbekende Transacties sheet)
 
 ### Next session checklist
 1. Voer `git status` + `git log --oneline -5` uit vóór je iets doet
-2. Split excel_output.py: doel ≤300 regels per bestand (sheet_data / sheet_overview / sheet_jaar / sheet_controle)
-3. Coverage 2025 verhogen: open `boekhouding_2025.xlsx` → filter Dagelijks Overig → voeg regels toe aan rules.xlsx
-4. 2026 spaarrekening TAB-bestand exporteren en toevoegen aan input/
+2. Coverage 2025 verhogen: open `boekhouding_2025.xlsx` → filter Onbekende Transacties → voeg keywords toe aan rules.xlsx; target 85%+
+3. 2026 spaarrekening TAB-bestand exporteren en toevoegen aan input/
+4. networth_config.py bijwerken met actuele saldi (Knab, beleggingen, schulden)
 
 ---
 
@@ -240,11 +275,12 @@ Rule: if a file is over 300 lines and touched every session, split it.
 
 ## Hoofddoelen
 
-1. Bankbestanden inlezen ✅ → process.py
-2. Bonnetjes inlezen → receipt_scanner.py (planned)
-3. Belastingaangifte → tax_report.py (planned)
-4. Jaarverslag + prognose → annual_report.py (planned)
-5. Dashboard (planned)
+1. Bankbestanden inlezen ✅ → process.py (ABN AMRO + Knab)
+2. Bonnetjes inlezen ⚙️ → business/scan_ollama.py (werkt voor JPG/PNG, geen PDF)
+3. Netto vermogen ⚙️ → business/networth.py (ABN auto; rest handmatig)
+4. Belastingaangifte → (gepland) BTW kwartaaloverzicht vanuit Knab data
+5. Jaarverslag + prognose → (gepland)
+6. Dashboard → (gepland, wacht op SQLite-beslissing)
 
 ---
 

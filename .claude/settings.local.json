@@ -8,7 +8,14 @@
       "Bash(python -X utf8 -c \"import pandas as pd; df=pd.read_excel\\('rules.xlsx', sheet_name='Rules'\\); print\\(df.to_string\\(\\)\\)\")",
       "Bash(python -X utf8 process.py --year 2026)",
       "Bash(python -X utf8 -c ' *)",
-      "Bash(xargs wc *)"
+      "Bash(xargs wc *)",
+      "Bash(python -X utf8 -c \"import loader; print\\([x for x in dir\\(loader\\) if not x.startswith\\('_'\\)]\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(python process.py)",
+      "Bash(PYTHONIOENCODING=utf-8 python process.py)",
+      "Bash(PYTHONIOENCODING=utf-8 python process.py --knab-only)",
+      "Bash(python -c ' *)",
+      "Bash(python networth.py)"
     ]
   }
 }

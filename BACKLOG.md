@@ -1,8 +1,13 @@
 # Backlog — Finance Project
 
 ## Now — in progress
-- [ ] 2025 coverage: 74% (960/1298 tx). 338 onbekend blijven. Open Onbekend 2025 sheet → voeg keywords toe aan rules.xlsx.
-- [ ] make sure the totals are right, currently the sums are going wrong and some income and expenditure is missed in the reports.
+- [ ] 2025 coverage: ~74% (~960/1280 tx). ~338 in Dagelijks Overig. Open `boekhouding_2025.xlsx` → Onbekende Transacties sheet → voeg keywords toe aan rules.xlsx. Target: 85%+.
+
+## Recently done
+- [x] Knab zakelijke rekening integratie (loader_knab.py, sheet_knab.py, boekhouding_knab.xlsx)
+- [x] fix: Knab→ABN transfers correctief als Interne Overboeking gemarkeerd (OWN_ACCOUNTS bug)
+- [x] business/networth.py — netto vermogen snapshot
+- [x] business/scan_ollama.py — factuurscanner via Ollama llava
 
 ## Next — ready to pick up
 - [ ] Auto-detect account numbers from TAB into config.json
