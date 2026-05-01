@@ -1,0 +1,5 @@
+bookkeeping/input/
+bookkeeping/output/
+bookkeeping/receipts/
+bookkeeping/__pycache__/
+*.pyc
