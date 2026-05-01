@@ -17,8 +17,9 @@ from sheet_knab import write_knab_jaaroverzicht, write_knab_uitschieters
 
 
 def _betaal_df(df):
-    betaal_acc = next((acc for acc, lbl in ACCOUNT_LABELS.items() if "Betaal" in lbl), None)
-    return df[df["account"] == betaal_acc] if betaal_acc else df
+    # Exclude spaarrekening; keep betaalrekening + Revolut + any unknown sources
+    spaar_acc = next((acc for acc, lbl in ACCOUNT_LABELS.items() if "Spaar" in lbl), None)
+    return df[df["account"] != spaar_acc] if spaar_acc else df
 
 
 def write_saldo_sheet(ws, df, year):

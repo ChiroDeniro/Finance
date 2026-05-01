@@ -1,21 +1,30 @@
 """
-ABN AMRO Bookkeeping Processor
-================================
-Drop your ABN AMRO Excel (TXT) export into the /input folder, then run:
+Bookkeeping Processor — ABN AMRO + Revolut + Knab
+==================================================
+Drop exports in the correct input subfolder, then run:
     python process.py
+
+Input folders:
+  input/ABN spaar en betaal/  ← ABN AMRO .TAB exports
+  input/Revolut/              ← Revolut .CSV exports (Dutch)
+  input/ODS/                  ← Knab zakelijke rekening .CSV exports
 
 Output:
   - output/boekhouding_YYYY.xlsx  per jaar  (Transacties, Maand Overzicht, Onbekende Transacties, Controle)
   - output/boekhouding_alles.xlsx masterbestand (Transacties, Controle)
+  - output/boekhouding_knab.xlsx  Knab zakelijke rekening
 """
 
 import os
 import sys
 import time
 
+import pandas as pd
+
 from config import RULES_FILE, INCOME_CATS, VASTE_LASTEN_CATS, DAGELIJKS_CATS, OVERIG_CATS, MAANDEN_NL, dutch_euros
 from loader import find_input_files, load_transactions
 from loader_knab import find_knab_files, load_knab_transactions, apply_knab_categories
+from loader_revolut import find_revolut_files, load_revolut_transactions
 from categoriser import load_rules, apply_categories, detect_internal_transfers, create_starter_rules, migrate_rules
 from excel_output import save_year_output, save_master_output, save_knab_output
 
@@ -97,17 +106,28 @@ def main():
     files = find_input_files()
     df    = load_transactions(files)
 
+    revolut_files = find_revolut_files()
+    if revolut_files:
+        print(f"\n--- Revolut ---")
+        print(f"Gevonden: {len(revolut_files)} Revolut bestand(en)")
+        for f in revolut_files:
+            print(f"  {os.path.basename(f)}")
+        df_rev = load_revolut_transactions(revolut_files)
+        if df_rev is not None:
+            df = pd.concat([df, df_rev], ignore_index=True).sort_values("date").reset_index(drop=True)
+
     if year_filter:
         df = df[df["year"] == year_filter].reset_index(drop=True)
         if df.empty:
             sys.exit(f"Geen transacties gevonden voor jaar {year_filter}")
         print(f"Gefilterd op {year_filter}: {len(df)} transacties")
-    print(f"Stap 1 (inlezen TAB):    {time.time() - t0:.2f}s")
+    print(f"Stap 1 (inlezen):        {time.time() - t0:.2f}s")
 
     t0    = time.time()
     rules = load_rules()
     df    = apply_categories(df, rules)
     df    = detect_internal_transfers(df)
+    df.loc[df["_revolut_transfer"], "category"] = "Interne Overboeking"
     print(f"Stap 2 (categoriseren):  {time.time() - t0:.2f}s")
 
     _print_verificatie(df)

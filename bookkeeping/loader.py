@@ -84,7 +84,9 @@ def load_transactions(files):
     df["year"]        = df["date"].dt.year.astype(str)
     df["amount"]      = df["amount"].str.replace(",", ".").astype(float)
     df["description"] = df["description"].str.strip()
-    df["merchant"]    = df["description"].apply(extract_merchant)
+    df["merchant"]           = df["description"].apply(extract_merchant)
+    df["source"]             = "ABN"
+    df["_revolut_transfer"]  = False
     df = df.sort_values("date").reset_index(drop=True)
 
     print(f"Geladen: {len(df)} transacties  "

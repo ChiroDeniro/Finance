@@ -25,6 +25,7 @@ finance/
 │   ├── process.py                     ← hoofdscript — ABN + Knab verwerken
 │   ├── loader.py                      ← ABN AMRO TAB bestanden inlezen
 │   ├── loader_knab.py                 ← Knab CSV bestanden inlezen
+│   ├── loader_revolut.py              ← Revolut CSV bestanden inlezen
 │   ├── categoriser.py                 ← categorisatielogica + rules.xlsx beheer
 │   ├── config.py                      ← constanten: categorieën, kleuren, paden
 │   ├── config.json                    ← account labels + IBAN-regels
@@ -36,9 +37,10 @@ finance/
 │   ├── sheet_controle.py              ← Controle sheet
 │   ├── sheet_knab.py                  ← Knab: Jaar Vergelijking + Uitschieters
 │   ├── rules.xlsx                     ← categorisatieregels (keyword → categorie)
-│   ├── input/                         ← drop .TAB bestanden hier, submappen toegestaan (gitignored)
-│   │   ├── ABN spaar en betaal/       ← voorbeeld submap voor ABN TAB exports
-│   │   └── ODS/                       ← drop Knab .CSV bestanden hier (gitignored)
+│   ├── input/                         ← bankexports (gitignored)
+│   │   ├── ABN spaar en betaal/       ← ABN betaalrekening + spaarrekening .TAB exports
+│   │   ├── ODS/                       ← Knab zakelijke rekening .CSV exports
+│   │   └── Revolut/                   ← Revolut .CSV exports (Dutch, Status=VOLTOOID)
 │   ├── receipts/                      ← drop bonnetjes/facturen hier (gitignored)
 │   ├── output/                        ← alle Excel outputs (gitignored)
 │   └── InfoFiles/
@@ -103,8 +105,9 @@ Dependencies: `pip install pandas openpyxl`
 Ollama (for scan_ollama.py): `ollama pull llava`
 
 ### Input directories
-- `bookkeeping/input/*.TAB` — ABN AMRO Excel (TXT) exports
+- `bookkeeping/input/ABN spaar en betaal/*.TAB` — ABN AMRO betaalrekening + spaarrekening
 - `bookkeeping/input/ODS/*.csv` — Knab zakelijke rekening exports
+- `bookkeeping/input/Revolut/*.csv` — Revolut exports (Dutch; Status=VOLTOOID; Overschrijving → Interne Overboeking)
 
 ---
 

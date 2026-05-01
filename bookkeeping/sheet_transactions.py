@@ -9,7 +9,7 @@ def write_transactions_sheet(ws, df):
     ws.freeze_panes = "A2"
 
     headers = ["Datum", "Rekening", "Omschrijving", "Merchant",
-               "Bedrag (EUR)", "Categorie", "Maand"]
+               "Bedrag (EUR)", "Categorie", "Bron", "Maand"]
     for c, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=c, value=h)
         cell.fill = _fill(C_HEADER)
@@ -29,7 +29,9 @@ def write_transactions_sheet(ws, df):
             row["date"].date(),
             ACCOUNT_LABELS.get(str(row["account"]), str(row["account"])),
             row["description"][:80],
-            row["merchant"], row["amount"], row["category"], row["month"],
+            row["merchant"], row["amount"], row["category"],
+            row.get("source", "ABN"),
+            row["month"],
         ]
         for c, val in enumerate(data, 1):
             cell = ws.cell(row=r, column=c, value=val)
@@ -40,6 +42,6 @@ def write_transactions_sheet(ws, df):
             if c == 5:
                 cell.number_format = euro_fmt
 
-    for c, w in enumerate([12, 12, 50, 28, 14, 22, 10], 1):
+    for c, w in enumerate([12, 12, 50, 28, 14, 22, 8, 10], 1):
         ws.column_dimensions[get_column_letter(c)].width = w
     ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
