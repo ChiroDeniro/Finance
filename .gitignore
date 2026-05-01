@@ -5,3 +5,4 @@ bookkeeping/__pycache__/
 business/output/
 business/__pycache__/
 *.pyc
+~$*
