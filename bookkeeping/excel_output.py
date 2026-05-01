@@ -17,6 +17,7 @@ from config import (
     C_OVR_HDR, C_OVR_SUB,
     C_SAM_HDR, C_NETTO_POS, C_NETTO_NEG,
     C_HEADER, C_ALT_ROW, KOSTEN_EXCLUDE,
+    ACCOUNT_LABELS,
     format_period, _fill,
 )
 
@@ -43,7 +44,9 @@ def write_transactions_sheet(ws, df):
         fill = (inc_fill if is_income
                 else (alt_fill if r % 2 == 0 else None))
         data = [
-            row["date"].date(), row["account"], row["description"][:80],
+            row["date"].date(),
+            ACCOUNT_LABELS.get(str(row["account"]), str(row["account"])),
+            row["description"][:80],
             row["merchant"], row["amount"], row["category"], row["month"],
         ]
         for c, val in enumerate(data, 1):

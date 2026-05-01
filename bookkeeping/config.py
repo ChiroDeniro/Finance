@@ -54,6 +54,10 @@ KOSTEN_EXCLUDE = frozenset()
 ALL_KNOWN_CATS = INCOME_CATS + VASTE_LASTEN_CATS + DAGELIJKS_CATS + OVERIG_CATS
 
 OWN_ACCOUNTS = {"536542171", "844835730"}
+ACCOUNT_LABELS = {
+    "536542171": "Betaalrekening",
+    "844835730": "Spaarrekening",
+}
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 WHITE = "FFFFFF"

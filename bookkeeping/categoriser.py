@@ -55,7 +55,16 @@ def apply_categories(df, rules):
 
 
 def detect_internal_transfers(df):
-    mask = pd.Series(False, index=df.index)
+    own_padded = {str(a).zfill(10) for a in OWN_ACCOUNTS}
+
+    def _desc_match(row):
+        row_padded = str(row["account"]).zfill(10)
+        desc = str(row["description"])
+        return any(p in desc for p in own_padded if p != row_padded)
+
+    mask_desc = df.apply(_desc_match, axis=1)
+
+    mask_pair = pd.Series(False, index=df.index)
     for (date_val, abs_amt), group in df.groupby(
         [df["date"].dt.date, df["amount"].abs()]
     ):
@@ -63,7 +72,9 @@ def detect_internal_transfers(df):
             accs = set(group["account"].unique())
             if len(accs.intersection(OWN_ACCOUNTS)) >= 2:
                 if abs(group["amount"].sum()) < 0.02:
-                    mask.loc[group.index] = True
+                    mask_pair.loc[group.index] = True
+
+    mask = mask_desc | mask_pair
     n = int(mask.sum())
     if n:
         df.loc[mask, "category"] = "Interne Overboeking"
