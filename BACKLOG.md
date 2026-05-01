@@ -7,8 +7,9 @@
 
 ## Recently done
 - [x] Categorisatieregels 106 → 153, coverage 2025: 73% → 82%
+- [x] loader.py: input/ submappen toegestaan (recursief zoeken)
 - [x] Knab zakelijke rekening integratie (loader_knab.py, sheet_knab.py, boekhouding_knab.xlsx)
-- [x] fix: Knab→ABN transfers correct als Interne Overboeking gemarkeerd (OWN_ACCOUNTS bug)
+- [x] fix: Knab→ABN transfers niet meer als Interne Overboeking (OWN_ACCOUNTS bug)
 - [x] business/networth.py — netto vermogen snapshot
 - [x] business/scan_ollama.py — factuurscanner via Ollama llava
 

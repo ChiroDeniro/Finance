@@ -36,7 +36,8 @@ finance/
 │   ├── sheet_controle.py              ← Controle sheet
 │   ├── sheet_knab.py                  ← Knab: Jaar Vergelijking + Uitschieters
 │   ├── rules.xlsx                     ← categorisatieregels (keyword → categorie)
-│   ├── input/                         ← drop .TAB bestanden hier (gitignored)
+│   ├── input/                         ← drop .TAB bestanden hier, submappen toegestaan (gitignored)
+│   │   ├── ABN spaar en betaal/       ← voorbeeld submap voor ABN TAB exports
 │   │   └── ODS/                       ← drop Knab .CSV bestanden hier (gitignored)
 │   ├── receipts/                      ← drop bonnetjes/facturen hier (gitignored)
 │   ├── output/                        ← alle Excel outputs (gitignored)
@@ -188,6 +189,7 @@ Keuzes die niet uit de code zelf blijken — bewaar dit voor toekomstige sessies
 | Alleen `pandas` + `openpyxl` | Geen zware deps, geen API-sleutels, werkt offline |
 | Keyword-matching i.p.v. ML | Regels zijn zichtbaar in rules.xlsx, deterministisch, makkelijk te debuggen |
 | Interne overboeking op bedrag+datum | Omschrijving varieert; alleen bedrag+datum is betrouwbaar |
+| OWN_ACCOUNTS bevat alleen ABN rekeningen | Knab IBAN eruit — anders worden Knab→ABN overboekingen als Interne Overboeking gemarkeerd en valt ZZP-inkomen uit de totalen |
 | Output naar Drive-map als die bestaat | Automatische sync naar Google Drive zonder extra stap |
 | `--year YYYY` filter | Verwerkt één jaar zonder andere data aan te raken; geeft schone Excel per jaar |
 | Stijl in module-niveau constanten | Één plek voor kleuren/fonts — geen magic values door de code heen |
@@ -196,6 +198,7 @@ Keuzes die niet uit de code zelf blijken — bewaar dit voor toekomstige sessies
 | README vs CLAUDE.md | README = for humans who've never seen the project. CLAUDE.md = for Claude Code starting fresh. Never mix audiences. |
 | SUMIFS i.p.v. Python-sommen | Formules blijven correct na handmatige Excel-edits; categorie wijzigen in Transacties herberekent automatisch alle totalen |
 | Sign-guard INCOME_CATS | Voorkomt dat negatieve transacties in inkomen-categorieën (bijv. outgoing familie/hogeschool) de inkomenstotalen vervormen |
+| input/ submappen toegestaan | find_input_files() zoekt recursief — TAB-bestanden mogen in submappen georganiseerd staan |
 
 **Dagelijks Overig (vangnet)**
 Alle transacties zonder matchende rule landen automatisch in
@@ -225,6 +228,7 @@ blijft altijd zichtbaar in het maandoverzicht, ook als het nul is.
 - **business/networth.py** — netto vermogen snapshot (ABN saldi auto-gelezen uit TAB; Knab + beleggingen + schulden handmatig in networth_config.py)
 - **business/scan_ollama.py** — facturen OCR via Ollama llava (JPG/PNG; PDF's worden overgeslagen)
 - **fix: Knab→ABN transfers niet meer als Interne Overboeking** — OWN_ACCOUNTS bevat alleen de twee ABN rekeningen; Knab-zijde wordt afgehandeld door loader_knab.py
+- **input/ submappen**: TAB-bestanden mogen in submappen staan (bijv. `input/ABN spaar en betaal/`); loader zoekt recursief
 
 ### Bekende technische schuld
 - 2026 spaarrekening TAB-bestand ontbreekt nog → geen interne overboekingen detecteerbaar voor 2026
