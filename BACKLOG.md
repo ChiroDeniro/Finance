@@ -17,6 +17,12 @@
       Decide before building receipt_scanner.py or annual_report.py.
 
 ## Later — ideas + wishes
+- [ ] Saldo per rekening per eerste van de maand als aparte sheet
+      Basis voor net worth berekening later
+      Input: balance_after van laatste transactie per rekening per maand
+- [ ] Net worth overzicht: bezittingen - schulden per maand
+      Rekeningen + spaargeld als startpunt
+      Uitbreidbaar naar beleggingen, auto, etc.
 - [ ] Receipt OCR via Claude Vision API (receipt_scanner.py)
 - [ ] BTW kwartaaloverzicht voor belastingaangifte (tax_report.py)
 - [ ] Jaarverslag + 3-maands prognose (annual_report.py)
