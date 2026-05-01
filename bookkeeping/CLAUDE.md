@@ -232,15 +232,16 @@ blijft altijd zichtbaar in het maandoverzicht, ook als het nul is.
 - config.json: spaarrekening IBAN nog niet ingevuld
 
 ### Coverage
-- **2025**: ~74% (~960/1280 reële transacties), ~338 in Dagelijks Overig
+- **2025**: 82% (1051/1280 reële transacties), 229 in Dagelijks Overig (25 intentioneel, 204 onbekend)
 - **2026**: ~92% (~366/396 transacties), ~30 in Dagelijks Overig
+- 153 regels in rules.xlsx
 - Uncategorised transacties landen in Dagelijks Overig (zichtbaar in Maand Overzicht + Onbekende Transacties sheet)
 
 ### Next session checklist
 1. Voer `git status` + `git log --oneline -5` uit vóór je iets doet
-2. Coverage 2025 verhogen: open `boekhouding_2025.xlsx` → filter Onbekende Transacties → voeg keywords toe aan rules.xlsx; target 85%+
-3. 2026 spaarrekening TAB-bestand exporteren en toevoegen aan input/
-4. networth_config.py bijwerken met actuele saldi (Knab, beleggingen, schulden)
+2. 2026 spaarrekening TAB-bestand exporteren en toevoegen aan input/
+3. networth_config.py bijwerken met actuele saldi (Knab, beleggingen, schulden)
+4. Coverage 2025 verder: `boekhouding_2025.xlsx` → Onbekende Transacties → handmatig bekijken welke nog regels verdienen
 
 ---
 

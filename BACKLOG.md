@@ -1,11 +1,14 @@
 # Backlog — Finance Project
 
 ## Now — in progress
-- [ ] 2025 coverage: ~74% (~960/1280 tx). ~338 in Dagelijks Overig. Open `boekhouding_2025.xlsx` → Onbekende Transacties sheet → voeg keywords toe aan rules.xlsx. Target: 85%+.
+- [ ] 2025 coverage: 82% (1051/1280 tx). 204 echt onbekend, 25 intentioneel Dagelijks Overig.
+      Resterende unknowns zijn grotendeels éénmalige merchants + Tikkie/ING Betaalverzoek.
+      Open `boekhouding_2025.xlsx` → Onbekende Transacties → handmatig categoriseren waar relevant.
 
 ## Recently done
+- [x] Categorisatieregels 106 → 153, coverage 2025: 73% → 82%
 - [x] Knab zakelijke rekening integratie (loader_knab.py, sheet_knab.py, boekhouding_knab.xlsx)
-- [x] fix: Knab→ABN transfers correctief als Interne Overboeking gemarkeerd (OWN_ACCOUNTS bug)
+- [x] fix: Knab→ABN transfers correct als Interne Overboeking gemarkeerd (OWN_ACCOUNTS bug)
 - [x] business/networth.py — netto vermogen snapshot
 - [x] business/scan_ollama.py — factuurscanner via Ollama llava
 
