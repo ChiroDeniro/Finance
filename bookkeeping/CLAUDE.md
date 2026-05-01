@@ -188,22 +188,24 @@ blijft altijd zichtbaar in het maandoverzicht, ook als het nul is.
 - **Maand Overzicht en Jaar Samenvatting gebruiken live SUMIFS-formules** — categorie handmatig wijzigen in Transacties-sheet herberekent automatisch alle totalen
 - **Sign-guard op alle INCOME_CATS** — negatieve transacties in inkomen-categorieën gaan automatisch naar Dagelijks Overig
 - **Zorgtoeslag teruggevonden**: belastingdienst-rule hersteld (was Dagelijks Overig, nu Zorgtoeslag → €1.572 inkomen correct)
+- **Kleurstijl vereenvoudigd**: alleen 4 rijen gekleurd via KLEUR_POSITIEF / KLEUR_NEGATIEF constanten
+- **Alle 12 maanden zichtbaar** in Maand Overzicht, ook als er geen transacties zijn
+- **NETTO-rij toegevoegd** in Maand Overzicht
 
 ### Bekende technische schuld
-- **excel_output.py is 575 regels** — ver boven de 300-regelgrens uit de Ontwerpbeslissingen. Moet gesplitst worden vóór de volgende grote feature.
-- **18 commits lokaal, nog nooit gepusht naar origin/main**
-
-### Coverage 2025
-- ~73% (936/1280 reële transacties), 344 in Dagelijks Overig
-- "Onbekend"-sheet bestaat niet meer — uncategorised transacties landen in Dagelijks Overig (zichtbaar in Maand Overzicht)
+- **excel_output.py is 596 regels** — ver boven de 300-regelgrens. Splitsing is de volgende taak: sheet_data / sheet_overview / sheet_jaar / sheet_controle.
 - 2026 spaarrekening TAB-bestand ontbreekt nog → geen interne overboekingen detecteerbaar voor 2026
+
+### Coverage
+- **2025**: ~73% (936/1280 reële transacties), 344 in Dagelijks Overig
+- **2026**: ~92% (366/396 transacties), 30 in Dagelijks Overig
+- "Onbekend"-sheet bestaat niet meer — uncategorised transacties landen in Dagelijks Overig (zichtbaar in Maand Overzicht)
 
 ### Next session checklist
 1. Voer `git status` + `git log --oneline -5` uit vóór je iets doet
-2. Push de 18 lokale commits naar origin/main
-3. Split excel_output.py op (doel: ≤300 regels per bestand)
-4. Coverage 2025 verhogen: open `boekhouding_2025.xlsx` → filter Dagelijks Overig → voeg regels toe aan rules.xlsx
-5. 2026 spaarrekening TAB-bestand exporteren en toevoegen aan input/
+2. Split excel_output.py: doel ≤300 regels per bestand (sheet_data / sheet_overview / sheet_jaar / sheet_controle)
+3. Coverage 2025 verhogen: open `boekhouding_2025.xlsx` → filter Dagelijks Overig → voeg regels toe aan rules.xlsx
+4. 2026 spaarrekening TAB-bestand exporteren en toevoegen aan input/
 
 ---
 
