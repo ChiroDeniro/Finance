@@ -23,7 +23,7 @@ def save_year_output(df, year):
 
     t0 = time.time()
     ws_tx = wb.active
-    write_transactions_sheet(ws_tx, df_betaal)
+    write_transactions_sheet(ws_tx, df_betaal.sort_values("date", ascending=False))
     ws_tx.title = "Transacties"
     print(f"  Sheet Transacties:           {time.time() - t0:.2f}s")
 
@@ -60,7 +60,7 @@ def save_master_output(df):
 
     t0 = time.time()
     ws_tx = wb.active
-    write_transactions_sheet(ws_tx, df)
+    write_transactions_sheet(ws_tx, df.sort_values("date", ascending=False))
     ws_tx.title = "Transacties"
     print(f"  Sheet Transacties:           {time.time() - t0:.2f}s")
 
