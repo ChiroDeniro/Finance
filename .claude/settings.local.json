@@ -7,7 +7,8 @@
       "Bash(python -X utf8 process.py --migrate-rules)",
       "Bash(python -X utf8 -c \"import pandas as pd; df=pd.read_excel\\('rules.xlsx', sheet_name='Rules'\\); print\\(df.to_string\\(\\)\\)\")",
       "Bash(python -X utf8 process.py --year 2026)",
-      "Bash(python -X utf8 -c ' *)"
+      "Bash(python -X utf8 -c ' *)",
+      "Bash(xargs wc *)"
     ]
   }
 }
