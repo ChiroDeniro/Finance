@@ -62,7 +62,7 @@ def load_transactions(files):
     dfs = []
     for f in files:
         raw = pd.read_csv(
-            f, sep="\t", header=None, encoding="utf-8",
+            f, sep="\t", header=None, encoding="latin-1",
             names=["account", "currency", "date", "balance_before",
                    "balance_after", "value_date", "amount", "description"],
             dtype=str,

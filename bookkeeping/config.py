@@ -8,8 +8,7 @@ INPUT_DIR   = os.path.join(BASE_DIR, "input")
 RULES_FILE  = os.path.join(BASE_DIR, "rules.xlsx")
 CONFIG_JSON = os.path.join(BASE_DIR, "config.json")
 
-_DRIVE_DIR = r"C:\Users\chris\Documents\Finance\Kasboek"
-OUTPUT_DIR = _DRIVE_DIR if os.path.isdir(_DRIVE_DIR) else os.path.join(BASE_DIR, "output")
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
 os.makedirs(INPUT_DIR,  exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -56,11 +55,6 @@ KOSTEN_EXCLUDE = frozenset()
 ALL_KNOWN_CATS = INCOME_CATS + VASTE_LASTEN_CATS + DAGELIJKS_CATS + OVERIG_CATS
 
 OWN_ACCOUNTS = {"536542171", "844835730"}
-ACCOUNT_LABELS = {
-    "536542171":          "Betaalrekening",
-    "844835730":          "Spaarrekening",
-    "NL73KNAB0776712705": "Zakelijke Rekening (Knab)",
-}
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 WHITE = "FFFFFF"
@@ -109,6 +103,12 @@ def load_config():
 def save_config(cfg):
     with open(CONFIG_JSON, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+
+ACCOUNT_LABELS = {
+    k: v.get("label", k)
+    for k, v in load_config().get("accounts", {}).items()
+}
 
 
 def get_iban_rules():

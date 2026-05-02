@@ -25,8 +25,11 @@ from config import RULES_FILE, INCOME_CATS, VASTE_LASTEN_CATS, DAGELIJKS_CATS, O
 from loader import find_input_files, load_transactions
 from loader_knab import find_knab_files, load_knab_transactions, apply_knab_categories
 from loader_revolut import find_revolut_files, load_revolut_transactions
+from loader_degiro import find_degiro_files, load_degiro_transactions
+from loader_bitvavo import find_bitvavo_files, load_bitvavo_transactions
 from categoriser import load_rules, apply_categories, detect_internal_transfers, create_starter_rules, migrate_rules
-from excel_output import save_year_output, save_master_output, save_knab_output
+from excel_output import save_year_output, save_master_output, save_knab_output, save_degiro_output, save_bitvavo_output
+from db import init_db, upsert_transactions, upsert_degiro, upsert_bitvavo, row_counts
 
 
 def _print_verificatie(df):
@@ -97,8 +100,10 @@ def main():
         if idx + 1 < len(sys.argv):
             year_filter = sys.argv[idx + 1]
 
-    print("\nABN AMRO Bookkeeping Processor")
-    print("=" * 38)
+    init_db()
+
+    print("\nBookkeeping Processor — ABN + Revolut + Knab")
+    print("=" * 46)
     if year_filter:
         print(f"Jaar filter: {year_filter}")
 
@@ -130,6 +135,7 @@ def main():
     df.loc[df["_revolut_transfer"], "category"] = "Interne Overboeking"
     print(f"Stap 2 (categoriseren):  {time.time() - t0:.2f}s")
 
+    upsert_transactions(df)
     _print_verificatie(df)
 
     t0 = time.time()
@@ -157,6 +163,84 @@ def main():
         print()
 
     _process_knab(rules)
+    _process_degiro()
+    _process_bitvavo()
+
+    counts = row_counts()
+    print(f"\nDB totalen: {counts['transactions']} transacties | "
+          f"{counts['degiro_transactions']} DeGiro | "
+          f"{counts['bitvavo_transactions']} Bitvavo")
+
+
+def _process_degiro():
+    print("\n--- DeGiro ---")
+    files = find_degiro_files()
+    if not files:
+        print("Geen DeGiro CSV-bestanden gevonden in input/DeGiro/ — overgeslagen.")
+        return
+    print(f"Gevonden: {len(files)} bestand(en)")
+    for f in files:
+        print(f"  {os.path.basename(f)}")
+
+    t0 = time.time()
+    df = load_degiro_transactions(files)
+    if df is None or df.empty:
+        print("Geen DeGiro transacties geladen.")
+        return
+    print(f"Stap 1 (inlezen):        {time.time() - t0:.2f}s")
+
+    print("\n" + "=" * 50)
+    print("DEGIRO VERIFICATIE TOTALEN")
+    print("=" * 50)
+    print(f"1. Totaal transacties:             {len(df)}")
+    print(f"2. Aankopen (negatief Totaal EUR): {(df['totaal_eur'] < 0).sum()}")
+    print(f"3. Verkopen (positief Totaal EUR): {(df['totaal_eur'] > 0).sum()}")
+    print(f"4. Totale kosten EUR:              {df['kosten_eur'].sum():.2f}")
+    print(f"5. Netto kasstroom EUR:            {df['totaal_eur'].sum():.2f}")
+    print("=" * 50)
+
+    upsert_degiro(df)
+
+    t0 = time.time()
+    out = save_degiro_output(df)
+    print(f"Stap 2 (Excel output):   {time.time() - t0:.2f}s")
+    print(f"\n  Output: {out}\n")
+
+
+def _process_bitvavo():
+    print("\n--- Bitvavo ---")
+    files = find_bitvavo_files()
+    if not files:
+        print("Geen Bitvavo CSV-bestanden gevonden in input/Bitvavo - crypto/ — overgeslagen.")
+        return
+    print(f"Gevonden: {len(files)} bestand(en)")
+    for f in files:
+        print(f"  {os.path.basename(f)}")
+
+    t0 = time.time()
+    df = load_bitvavo_transactions(files)
+    if df is None or df.empty:
+        print("Geen Bitvavo transacties geladen.")
+        return
+    print(f"Stap 1 (inlezen):        {time.time() - t0:.2f}s")
+
+    print("\n" + "=" * 50)
+    print("BITVAVO VERIFICATIE TOTALEN")
+    print("=" * 50)
+    print(f"1. Totaal transacties:         {len(df)}")
+    print(f"2. Stortingen (EUR):           {df[df['type'] == 'deposit']['eur_amount'].sum():.2f}")
+    print(f"3. Aankopen EUR (betaald):     {df[df['type'] == 'buy']['eur_amount'].sum():.2f}")
+    print(f"4. Verkopen EUR (ontvangen):   {df[df['type'] == 'sell']['eur_amount'].sum():.2f}")
+    print(f"5. Totale kosten EUR:          {df['fee_eur'].sum():.2f}")
+    print(f"6. Netto EUR saldo beweging:   {df['eur_amount'].sum():.2f}")
+    print("=" * 50)
+
+    upsert_bitvavo(df)
+
+    t0 = time.time()
+    out = save_bitvavo_output(df)
+    print(f"Stap 2 (Excel output):   {time.time() - t0:.2f}s")
+    print(f"\n  Output: {out}\n")
 
 
 def _process_knab(rules):
@@ -180,6 +264,9 @@ def _process_knab(rules):
     t0 = time.time()
     df_knab = apply_knab_categories(df_knab, rules)
     print(f"Stap 2 (categoriseren):  {time.time() - t0:.2f}s")
+
+    df_knab["source"] = "Knab"
+    upsert_transactions(df_knab)
 
     df_real = df_knab[df_knab["category"] != "Interne Overboeking"]
     print("\n" + "=" * 50)

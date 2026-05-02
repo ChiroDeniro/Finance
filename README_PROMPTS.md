@@ -4,6 +4,28 @@ Gebruik deze prompts als startpunt voor elke Claude Code sessie.
 Pas de placeholders (`[...]`) aan naar de actuele situatie.
 
 ---
+# START SESSIE
+Doe alleen dit, niets anders:
+
+1. Voer uit: python -X utf8 process.py --year 2026
+   Noteer de coverage uit terminal output.
+
+2. Commit de huidige wijzigingen:
+   git add bookkeeping/excel_output.py bookkeeping/process.py BACKLOG.md
+   git add .claude/settings.json
+   git commit -m "feat: kleurstijl vereenvoudigd, alle 12 maanden in overzicht, NETTO-rij"
+
+3. Update CLAUDE.md sectie "Current state":
+   - Datum: vandaag
+   - excel_output.py is 596 regels — splitsing staat klaar als volgende taak
+   - Kleurstijl: alleen 4 rijen gekleurd (KLEUR_POSITIEF/KLEUR_NEGATIEF constanten)
+   - Alle 12 maanden zichtbaar in Maand Overzicht
+   - NETTO-rij toegevoegd
+   - Volgende taak: splitsing excel_output.py in sheet_data / sheet_overview / sheet_jaar / sheet_controle
+
+4. git add CLAUDE.md && git push origin main
+
+Lees geen andere bestanden. Raak rules.xlsx en categoriser.py niet aan.
 
 ## Backlog beheren
 

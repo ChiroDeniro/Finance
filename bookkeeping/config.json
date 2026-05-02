@@ -15,6 +15,6 @@
   },
   "iban_rules": {
     "knabnl": "ZZP Opname",
-    "revonl22": "Interne Overboeking"
+    "revolut": "Interne Overboeking"
   }
 }

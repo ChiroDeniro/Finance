@@ -7,7 +7,7 @@ INVOICE_DIRS = {
 
 SUPPORTED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
 
-OUTPUT_DIR = Path(__file__).parent / "output"
+OUTPUT_DIR = Path(__file__).parent.parent / "bookkeeping" / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 OLLAMA_URL = "http://localhost:11434/api/generate"

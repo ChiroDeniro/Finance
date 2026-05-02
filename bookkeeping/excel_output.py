@@ -14,6 +14,8 @@ from sheet_transactions import write_transactions_sheet
 from sheet_overview import write_overview_sheet
 from sheet_controle import write_controle_sheet
 from sheet_knab import write_knab_jaaroverzicht, write_knab_uitschieters
+from sheet_degiro import write_transacties as write_degiro_tx, write_maand_overzicht as write_degiro_mo, write_per_product
+from sheet_bitvavo import write_transacties as write_bitvavo_tx, write_maand_overzicht as write_bitvavo_mo, write_per_coin
 
 
 def _betaal_df(df):
@@ -174,6 +176,58 @@ def save_knab_output(df):
     t0 = time.time()
     wb.save(out_path)
     print(f"  wb.save():                   {time.time() - t0:.2f}s")
+    print(f"Opgeslagen: {out_path}")
+    return out_path
+
+
+def save_degiro_output(df):
+    """Generate boekhouding_degiro.xlsx voor DeGiro transacties."""
+    wb = Workbook()
+
+    t0 = time.time()
+    ws_tx = wb.active
+    write_degiro_tx(ws_tx, df)
+    ws_tx.title = "Transacties"
+    print(f"  Sheet Transacties:           {time.time() - t0:.2f}s")
+
+    t0 = time.time()
+    ws_mo = wb.create_sheet("Maand Overzicht")
+    write_degiro_mo(ws_mo, df)
+    print(f"  Sheet Maand Overzicht:       {time.time() - t0:.2f}s")
+
+    t0 = time.time()
+    ws_pp = wb.create_sheet("Per Product")
+    write_per_product(ws_pp, df)
+    print(f"  Sheet Per Product:           {time.time() - t0:.2f}s")
+
+    out_path = os.path.join(OUTPUT_DIR, "boekhouding_degiro.xlsx")
+    wb.save(out_path)
+    print(f"Opgeslagen: {out_path}")
+    return out_path
+
+
+def save_bitvavo_output(df):
+    """Generate boekhouding_bitvavo.xlsx voor Bitvavo crypto transacties."""
+    wb = Workbook()
+
+    t0 = time.time()
+    ws_tx = wb.active
+    write_bitvavo_tx(ws_tx, df)
+    ws_tx.title = "Transacties"
+    print(f"  Sheet Transacties:           {time.time() - t0:.2f}s")
+
+    t0 = time.time()
+    ws_mo = wb.create_sheet("Maand Overzicht")
+    write_bitvavo_mo(ws_mo, df)
+    print(f"  Sheet Maand Overzicht:       {time.time() - t0:.2f}s")
+
+    t0 = time.time()
+    ws_pc = wb.create_sheet("Per Coin")
+    write_per_coin(ws_pc, df)
+    print(f"  Sheet Per Coin:              {time.time() - t0:.2f}s")
+
+    out_path = os.path.join(OUTPUT_DIR, "boekhouding_bitvavo.xlsx")
+    wb.save(out_path)
     print(f"Opgeslagen: {out_path}")
     return out_path
 
